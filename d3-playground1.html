@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>D3 Playground</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script defer src="d3-playground2.js"></script>
+  </head>
+  <body>
+    <div style="display: inline-block;
+    width: 20px;
+    height: 75px;
+    background-color: teal;"></div>
+    <script>
+
+    // d3.select("body")
+    // .append("p")
+    // .text("新しいグラフあい")
+
+    // const body = d3.select("body");
+    // const p = body.append("p");
+    // p.text("あたらしいパラグラフ！");
+
+    const dataset = [ 5, 10, 15, 20, 25 ];
+
+    // const dataset = [];                          // 配列の宣言と初期化
+    // for (let i = 0; i < 25; i++) {          // ループを25回繰り返す
+    //   const newNumber = Math.random() * 30;  // 0～30のランダムな数を生成
+    //   dataset.push(newNumber);             // 生成した数を配列に追加
+    // }
+
+    // d3.select("body").selectAll("p")
+    //    .data(dataset)
+    //    .enter()
+    //    .append("p")
+    //    .text("パラグラフ！");
+
+    d3.select("body").selectAll("div")
+      .data(dataset)
+      .enter()
+      .append("div")
+      .attr("class", "bar")
+      .style("height", d => `${d * 5}px`)
+      .style("width", "20px")
+      .style("background", "steelblue")
+      .style("margin-right", "4px")
+      .style("display", "inline-block");
+
+
+    const svg = d3.select("body")
+                .append("svg")
+                .attr("width", 500)
+                .attr("height", 50);
+
+    svg.selectAll("circle")
+      .data(dataset)
+      .enter()
+      .append("circle")
+      // .attr("cy", 25)
+      .attr("r", 50)
+      .attr("fill", "red");
+
+    </script>
+  </body>
+</html>

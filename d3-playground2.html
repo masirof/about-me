@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>D3 Playground 2</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      :root {
+        --paper: #f6efe6;
+        --ink: #2a2017;
+        --muted: #7b6a58;
+        --line: #d2c3b2;
+      }
+      body {
+        margin: 0;
+        font-family: "Gill Sans", "Trebuchet MS", "Lucida Sans Unicode", sans-serif;
+        background: radial-gradient(circle at 20% 10%, #fff8f1, var(--paper));
+        color: var(--ink);
+      }
+      .wrap {
+        max-width: 1200px;
+        margin: 24px auto 0;
+        padding: 0 18px 20px;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 4px;
+        letter-spacing: 0.02em;
+      }
+      p {
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      svg {
+        width: 100%;
+        height: 78vh;
+        background: linear-gradient(160deg, #fff7ef, #f2e7db);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 14px 34px rgba(50, 35, 20, 0.12);
+      }
+      .link {
+        fill: none;
+        stroke: #bfae9d;
+        stroke-opacity: 0.55;
+        stroke-width: 3;
+      }
+      .node-frame {
+        stroke: rgba(0, 0, 0, 0.08);
+        stroke-width: 2;
+      }
+      .node-label {
+        font-size: 14px;
+        letter-spacing: 0.08em;
+        fill: #2b2118;
+      }
+      .node-sub {
+        font-size: 11px;
+        letter-spacing: 0.2em;
+        fill: rgba(0, 0, 0, 0.35);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Graphic Grid Graph</h1>
+      <p>512px image mocks arranged as a graphic design style graph.</p>
+      <svg></svg>
+    </div>
+    <script>
+      const nodeSize = 512;
+      const gap = 120;
+      const cols = 3;
+      const rows = 3;
+      const width = cols * nodeSize + (cols - 1) * gap + 360;
+      const height = rows * nodeSize + (rows - 1) * gap + 360;
+
+      const svg = d3.select("svg").attr("viewBox", `0 0 ${width} ${height}`);
+      const root = svg.append("g").attr("transform", "translate(180, 180)");
+
+      const palettes = [
+        { a: "#d86a47", b: "#f3b27c" },
+        { a: "#5a8d74", b: "#9fd2b1" },
+        { a: "#6a79c4", b: "#b4c6ff" },
+        { a: "#b8566d", b: "#f2a1b4" },
+        { a: "#c7923a", b: "#f4d393" }
+      ];
+
+      const nodes = d3.range(cols * rows).map((i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const x = col * (nodeSize + gap) + (row % 2 ? 60 : -30);
+        const y = row * (nodeSize + gap * 0.9) + (col === 1 ? -40 : 0);
+        return {
+          id: `node-${i}`,
+          label: `IMAGE ${String(i + 1).padStart(2, "0")}`,
+          sub: `SERIES-${String(row + 1)}`,
+          x,
+          y,
+          palette: palettes[i % palettes.length],
+          tilt: col === 1 ? -2 : 2
+        };
+      });
+
+      const links = [
+        { source: 0, target: 1 },
+        { source: 1, target: 2 },
+        { source: 3, target: 4 },
+        { source: 4, target: 5 },
+        { source: 6, target: 7 },
+        { source: 7, target: 8 },
+        { source: 0, target: 4 },
+        { source: 2, target: 4 },
+        { source: 4, target: 8 }
+      ];
+
+      const defs = svg.append("defs");
+      defs.selectAll("linearGradient")
+        .data(palettes)
+        .enter()
+        .append("linearGradient")
+        .attr("id", (d, i) => `grad-${i}`)
+        .attr("x1", "0%")
+        .attr("x2", "100%")
+        .attr("y1", "0%")
+        .attr("y2", "100%")
+        .each(function (d) {
+          d3.select(this)
+            .append("stop")
+            .attr("offset", "0%")
+            .attr("stop-color", d.a);
+          d3.select(this)
+            .append("stop")
+            .attr("offset", "100%")
+            .attr("stop-color", d.b);
+        });
+
+      function linkPath(d) {
+        const s = nodes[d.source];
+        const t = nodes[d.target];
+        const sx = s.x + nodeSize / 2;
+        const sy = s.y + nodeSize / 2;
+        const tx = t.x + nodeSize / 2;
+        const ty = t.y + nodeSize / 2;
+        const mx = (sx + tx) / 2;
+        return `M${sx},${sy} C${sx},${mx} ${tx},${mx} ${tx},${ty}`;
+      }
+
+      root.append("g")
+        .selectAll("path")
+        .data(links)
+        .enter()
+        .append("path")
+        .attr("class", "link")
+        .attr("d", linkPath);
+
+      const nodeG = root.selectAll(".node")
+        .data(nodes, (d) => d.id)
+        .enter()
+        .append("g")
+        .attr("class", "node")
+        .attr("transform", (d) => `translate(${d.x}, ${d.y}) rotate(${d.tilt})`);
+
+      nodeG.append("rect")
+        .attr("class", "node-frame")
+        .attr("width", nodeSize)
+        .attr("height", nodeSize)
+        .attr("rx", 28)
+        .attr("fill", (d, i) => `url(#grad-${i % palettes.length})`);
+
+      nodeG.append("rect")
+        .attr("x", 36)
+        .attr("y", 36)
+        .attr("width", nodeSize - 72)
+        .attr("height", nodeSize - 140)
+        .attr("rx", 22)
+        .attr("fill", "rgba(255,255,255,0.24)");
+
+      nodeG.append("rect")
+        .attr("x", 36)
+        .attr("y", nodeSize - 84)
+        .attr("width", nodeSize - 72)
+        .attr("height", 48)
+        .attr("rx", 18)
+        .attr("fill", "rgba(0,0,0,0.14)");
+
+      nodeG.append("text")
+        .attr("class", "node-label")
+        .attr("x", 52)
+        .attr("y", nodeSize - 52)
+        .text((d) => d.label);
+
+      nodeG.append("text")
+        .attr("class", "node-sub")
+        .attr("x", 52)
+        .attr("y", nodeSize - 28)
+        .text((d) => d.sub);
+    </script>
+  </body>
+</html>

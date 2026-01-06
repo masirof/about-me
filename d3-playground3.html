@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>D3 Playground 3</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      :root {
+        --bg: #0b0f14;
+        --grid: rgba(120, 170, 220, 0.08);
+        --ink: #cfe7ff;
+        --muted: #6f92b4;
+        --link: rgba(90, 160, 220, 0.22);
+        --node: #7fd3ff;
+        --node2: #8dffcf;
+        --warn: #ffb36a;
+      }
+      body {
+        margin: 0;
+        font-family: "Consolas", "Courier New", monospace;
+        background: var(--bg);
+        color: var(--ink);
+      }
+      .wrap {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 16px 18px 20px;
+      }
+      h1 {
+        font-size: 16px;
+        margin: 0 0 6px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+      }
+      p {
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      svg {
+        width: 100%;
+        height: 84vh;
+        background:
+          linear-gradient(0deg, var(--grid) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+        background-size: 40px 40px;
+        border: 1px solid rgba(120, 170, 220, 0.18);
+        border-radius: 6px;
+      }
+      .hud {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        font-size: 11px;
+        margin-bottom: 10px;
+      }
+      .hud span {
+        border: 1px solid rgba(120, 170, 220, 0.25);
+        padding: 4px 8px;
+        color: var(--muted);
+      }
+      .link {
+        stroke: var(--link);
+        stroke-width: 1;
+      }
+      .node {
+        fill: var(--node);
+        stroke: rgba(180, 230, 255, 0.6);
+        stroke-width: 1;
+      }
+      .node.alt {
+        fill: var(--node2);
+      }
+      .node.alert {
+        fill: var(--warn);
+      }
+      .label {
+        fill: var(--muted);
+        font-size: 10px;
+        letter-spacing: 0.16em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Network HUD</h1>
+      <p>Dense disjoint network, drag nodes, scroll to zoom.</p>
+      <div class="hud">
+        <span>SECTOR A / B / C</span>
+        <span>TRAFFIC: 78%</span>
+        <span>NODES: 120</span>
+        <span>LINKS: 180</span>
+      </div>
+      <svg></svg>
+    </div>
+    <script>
+      const width = 2000;
+      const height = 1400;
+      const svg = d3.select("svg").attr("viewBox", `0 0 ${width} ${height}`);
+      const root = svg.append("g");
+
+      const zoom = d3.zoom()
+        .scaleExtent([0.4, 4])
+        .on("zoom", (event) => root.attr("transform", event.transform));
+
+      svg.call(zoom);
+
+      const groups = ["A", "B", "C"];
+      const nodeCount = 120;
+      const linkCount = 180;
+
+      const nodes = d3.range(nodeCount).map((i) => ({
+        id: `N-${String(i + 1).padStart(3, "0")}`,
+        group: groups[i % groups.length],
+        alert: i % 17 === 0
+      }));
+
+      const links = d3.range(linkCount).map(() => {
+        const source = Math.floor(Math.random() * nodeCount);
+        let target = Math.floor(Math.random() * nodeCount);
+        if (target === source) target = (target + 1) % nodeCount;
+        return { source, target };
+      });
+
+      const linkG = root.append("g");
+      const nodeG = root.append("g");
+      const labelG = root.append("g");
+
+      const link = linkG.selectAll("line")
+        .data(links)
+        .enter()
+        .append("line")
+        .attr("class", "link");
+
+      const node = nodeG.selectAll("circle")
+        .data(nodes, (d) => d.id)
+        .enter()
+        .append("circle")
+        .attr("class", (d, i) => {
+          const alt = i % 2 === 0 ? " alt" : "";
+          const alert = d.alert ? " alert" : "";
+          return `node${alt}${alert}`;
+        })
+        .attr("r", (d) => (d.alert ? 7 : 4))
+        .call(
+          d3.drag()
+            .on("start", (event, d) => {
+              if (!event.active) simulation.alphaTarget(0.2).restart();
+              d.fx = d.x;
+              d.fy = d.y;
+            })
+            .on("drag", (event, d) => {
+              d.fx = event.x;
+              d.fy = event.y;
+            })
+            .on("end", (event, d) => {
+              if (!event.active) simulation.alphaTarget(0);
+              d.fx = null;
+              d.fy = null;
+            })
+        );
+
+      const labels = labelG.selectAll("text")
+        .data(nodes.filter((_, i) => i % 12 === 0))
+        .enter()
+        .append("text")
+        .attr("class", "label")
+        .text((d) => d.id);
+
+      const simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(links).distance(50).strength(0.5))
+        .force("charge", d3.forceManyBody().strength(-40))
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collide", d3.forceCollide().radius((d) => (d.alert ? 10 : 6)))
+        .on("tick", () => {
+          link
+            .attr("x1", (d) => d.source.x)
+            .attr("y1", (d) => d.source.y)
+            .attr("x2", (d) => d.target.x)
+            .attr("y2", (d) => d.target.y);
+
+          node
+            .attr("cx", (d) => d.x)
+            .attr("cy", (d) => d.y);
+
+          labels
+            .attr("x", (d) => d.x + 10)
+            .attr("y", (d) => d.y - 10);
+        });
+    </script>
+  </body>
+</html>
