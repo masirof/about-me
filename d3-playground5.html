@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>D3 Playground 5</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      :root {
+        --bg: #0a0a0a;
+        --ink: #e6e6e6;
+        --muted: #8a8a8a;
+        --line: rgba(255, 255, 255, 0.18);
+        --accent: #ffffff;
+      }
+      body {
+        margin: 0;
+        font-family: "Consolas", "Courier New", monospace;
+        background: var(--bg);
+        color: var(--ink);
+      }
+      .wrap {
+        max-width: 1400px;
+        margin: 14px auto 0;
+        padding: 0 16px 16px;
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 6px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+      }
+      p {
+        margin: 0 0 10px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      svg {
+        width: 100%;
+        height: 84vh;
+        background:
+          radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.05), transparent 55%),
+          radial-gradient(circle at 70% 80%, rgba(255, 255, 255, 0.04), transparent 60%),
+          var(--bg);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      .stage {
+        position: relative;
+      }
+      .tile {
+        fill: rgba(255, 255, 255, 0.04);
+        stroke: var(--line);
+        stroke-width: 2;
+      }
+      .tile.active {
+        stroke: var(--accent);
+        stroke-width: 4;
+      }
+      .tile-inner {
+        fill: none;
+        stroke: rgba(255, 255, 255, 0.14);
+        stroke-width: 1;
+      }
+      .tile-face {
+        transform-origin: center;
+        transform-box: fill-box;
+      }
+      .cat-label {
+        font-size: 14px;
+        letter-spacing: 0.3em;
+        fill: var(--muted);
+      }
+      .preview {
+        position: absolute;
+        left: 50%;
+        top: 52%;
+        width: 520px;
+        height: 520px;
+        margin-left: -260px;
+        margin-top: -260px;
+        pointer-events: none;
+        display: grid;
+        place-items: center;
+        opacity: 0;
+        transform: scale(0.96);
+        transition: opacity 0.15s ease, transform 0.15s ease;
+      }
+      .preview.show {
+        opacity: 1;
+        transform: scale(1);
+      }
+      .preview-frame {
+        width: 512px;
+        height: 512px;
+        border: 2px solid rgba(255, 255, 255, 0.6);
+        box-shadow:
+          0 24px 60px rgba(0, 0, 0, 0.6),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.08);
+        display: grid;
+        place-items: center;
+      }
+      .preview-label {
+        font-size: 12px;
+        letter-spacing: 0.2em;
+        color: rgba(255, 255, 255, 0.7);
+        margin-top: 10px;
+        text-align: center;
+      }
+      .tooltip {
+        position: absolute;
+        pointer-events: none;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.85);
+        color: #fff;
+        font-size: 12px;
+        opacity: 0;
+        transform: translateY(6px);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+      }
+      .tooltip.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Snowflake Layout</h1>
+      <p>Scroll: zoom / Drag: pan / Double click: focus on tile.</p>
+      <div class="stage">
+        <svg></svg>
+        <div class="preview" id="preview">
+          <div class="preview-frame" id="previewFrame"></div>
+          <div class="preview-label" id="previewLabel"></div>
+        </div>
+      </div>
+    </div>
+    <script>
+      const tileSize = 512;
+      const tilesPerCategory = 20;
+      const step = tileSize + 36;
+      const branchOffset = tileSize * 0.55;
+      const width = 12000;
+      const height = 12000;
+
+      const categories = [
+        { id: "music", name: "音楽", color: "#8fd0ff" },
+        { id: "design", name: "デザイン", color: "#ffd28a" },
+        { id: "avatar", name: "アバター", color: "#d6a6ff" },
+        { id: "manga", name: "漫画", color: "#ff9ea8" },
+        { id: "made", name: "作ったもの", color: "#9ef0c4" },
+        { id: "photo", name: "写真", color: "#8ff3ff" },
+        { id: "anime", name: "アニメ", color: "#ffd7ff" }
+      ];
+
+      const svg = d3.select("svg").attr("viewBox", `0 0 ${width} ${height}`);
+      const zoomG = svg.append("g");
+      const root = zoomG.append("g").attr("transform", `translate(${width / 2}, ${height / 2})`);
+      const tooltip = d3.select("body").append("div").attr("class", "tooltip");
+      const preview = document.getElementById("preview");
+      const previewFrame = document.getElementById("previewFrame");
+      const previewLabel = document.getElementById("previewLabel");
+
+      const zoom = d3.zoom()
+        .scaleExtent([0.001, 60])
+        .on("zoom", (event) => zoomG.attr("transform", event.transform));
+
+      svg.call(zoom);
+
+      function branchPoints(count) {
+        const half = Math.ceil(count / 2);
+        return d3.range(count).map((i) => {
+          const lane = i < half ? -1 : 1;
+          const idx = i < half ? i : i - half;
+          return {
+            x: idx * step,
+            y: lane * branchOffset
+          };
+        });
+      }
+
+      const angles = [0, 60, 120, 180, 240, 300];
+      const center = { x: 0, y: 0 };
+
+      const layout = categories.map((cat, i) => {
+        if (i === 0) {
+          return { ...cat, x: center.x, y: center.y, angle: 45, type: "center" };
+        }
+        const armIndex = (i - 1) % angles.length;
+        const angle = angles[armIndex];
+        const radius = step * 3.2;
+        const rad = (angle * Math.PI) / 180;
+        return {
+          ...cat,
+          x: Math.cos(rad) * radius,
+          y: Math.sin(rad) * radius,
+          angle,
+          type: "arm"
+        };
+      });
+
+      const tileData = layout.flatMap((cat) => {
+        if (cat.type === "center") {
+          const cols = 4;
+          const rows = 5;
+          const startX = -((cols - 1) * step) / 2;
+          const startY = -((rows - 1) * step) / 2;
+          return d3.range(tilesPerCategory).map((i) => {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            return {
+              id: `${cat.id}-${i}`,
+              category: cat.name,
+              color: cat.color,
+              x: startX + col * step,
+              y: startY + row * step,
+              angle: cat.angle,
+              groupX: cat.x,
+              groupY: cat.y
+            };
+          });
+        }
+        const points = branchPoints(tilesPerCategory);
+        return points.map((pt, i) => ({
+          id: `${cat.id}-${i}`,
+          category: cat.name,
+          color: cat.color,
+          x: pt.x,
+          y: pt.y,
+          angle: cat.angle,
+          groupX: cat.x,
+          groupY: cat.y
+        }));
+      });
+
+      const catG = root.selectAll(".cat")
+        .data(layout, (d) => d.id)
+        .enter()
+        .append("g")
+        .attr("class", "cat")
+        .attr("transform", (d) => `translate(${d.x}, ${d.y}) rotate(${d.angle})`);
+
+      catG.append("text")
+        .attr("class", "cat-label")
+        .attr("x", -120)
+        .attr("y", -step * 1.6)
+        .text((d) => d.name);
+
+      const tileG = root.selectAll(".tile-group")
+        .data(tileData, (d) => d.id)
+        .enter()
+        .append("g")
+        .attr("class", "tile-group")
+        .attr("transform", (d) => `translate(${d.groupX}, ${d.groupY}) rotate(${d.angle}) translate(${d.x}, ${d.y})`);
+
+      const tileFace = tileG.append("g")
+        .attr("class", "tile-face")
+        .attr("transform", "skewY(-10) skewX(4) rotate(-1)");
+
+      tileFace.append("rect")
+        .attr("class", "tile")
+        .attr("width", tileSize)
+        .attr("height", tileSize)
+        .attr("rx", 18)
+        .attr("ry", 18)
+        .attr("fill", (d) => `${d.color}22`);
+
+      tileFace.append("rect")
+        .attr("class", "tile-inner")
+        .attr("x", 40)
+        .attr("y", 40)
+        .attr("width", tileSize - 80)
+        .attr("height", tileSize - 80)
+        .attr("rx", 12);
+
+      tileG.attr("data-cat", (d) => d.category)
+        .on("mousemove", (event, d) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          const mx = (event.clientX - rect.left) / rect.width - 0.5;
+          const my = (event.clientY - rect.top) / rect.height - 0.5;
+          const tiltX = (my * -6).toFixed(2);
+          const tiltY = (mx * 6).toFixed(2);
+          d3.select(event.currentTarget)
+            .select(".tile-face")
+            .style("transform", `perspective(900px) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`);
+
+          tooltip
+            .html(`<strong>${d.category}</strong><br/>${tileSize}px x ${tileSize}px`)
+            .style("left", `${event.pageX + 12}px`)
+            .style("top", `${event.pageY - 12}px`)
+            .classed("show", true);
+
+          previewFrame.style.background = `${d.color}22`;
+          previewFrame.style.borderColor = d.color;
+          previewLabel.textContent = `${d.category} / ${d.id}`;
+          preview.classList.add("show");
+        })
+        .on("mouseleave", (event) => {
+          tooltip.classed("show", false);
+          d3.select(event.currentTarget)
+            .select(".tile-face")
+            .style("transform", null);
+          preview.classList.remove("show");
+        })
+        .on("click", (event) => {
+          tileG.selectAll(".tile").classed("active", false);
+          d3.select(event.currentTarget).select(".tile").classed("active", true);
+        })
+        .on("dblclick", (event, d) => {
+          const { width: viewW, height: viewH } = svg.node().getBoundingClientRect();
+          const maxScale = zoom.scaleExtent()[1];
+          const local = d3.zoomIdentity
+            .translate(viewW / 2, viewH / 2)
+            .scale(maxScale)
+            .translate(-(d.groupX + d.x + tileSize / 2), -(d.groupY + d.y + tileSize / 2));
+          svg.transition().duration(600).call(zoom.transform, local);
+        });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>D3 Playground 4</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      :root {
+        --bg: #f6f1ea;
+        --ink: #2b2017;
+        --muted: #7b6a58;
+        --line: #d8c9b8;
+        --accent: #c46a3a;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+      }
+      .wrap {
+        max-width: 1400px;
+        margin: 20px auto 0;
+        padding: 0 18px 20px;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 6px;
+        letter-spacing: 0.04em;
+      }
+      p {
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      svg {
+        width: 100%;
+        height: 80vh;
+        background: #fffaf5;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+      }
+      .tile-rect {
+        stroke: rgba(0, 0, 0, 0.08);
+        stroke-width: 2;
+      }
+      .tile.active .tile-rect {
+        stroke: var(--accent);
+        stroke-width: 4;
+      }
+      .category-label {
+        font-size: 14px;
+        letter-spacing: 0.2em;
+        fill: var(--muted);
+      }
+      .category-rule {
+        stroke: rgba(0, 0, 0, 0.12);
+        stroke-width: 2;
+      }
+      .tooltip {
+        position: absolute;
+        pointer-events: none;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: rgba(40, 30, 22, 0.9);
+        color: #fff7ef;
+        font-size: 12px;
+        opacity: 0;
+        transform: translateY(6px);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+      }
+      .tooltip.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Interactive Grid</h1>
+      <p>Scroll to zoom, drag to pan, click a tile to focus.</p>
+      <svg></svg>
+    </div>
+    <script>
+      const tileSize = 512;
+      const gap = 32;
+      const tilesPerCategory = 200;
+      const tilesCols = 20;
+      const tilesRows = 10;
+      const categoryGap = 200;
+      const categoryLabelOffset = 80;
+      const blockCols = 2;
+      const categories = [
+        { id: "music", name: "音楽" },
+        { id: "design", name: "デザイン" },
+        { id: "avatar", name: "アバター" },
+        { id: "manga", name: "漫画" },
+        { id: "made", name: "作ったもの" },
+        { id: "photo", name: "写真" },
+        { id: "anime", name: "アニメ" },
+        { id: "illustration", name: "イラスト" },
+        { id: "ui", name: "UI" },
+        { id: "video", name: "映像" }
+      ];
+      const blockWidth = tilesCols * (tileSize + gap) - gap;
+      const blockHeight = categoryLabelOffset + tilesRows * (tileSize + gap) - gap;
+      const blockRows = Math.ceil(categories.length / blockCols);
+      const padding = 120;
+      const width = blockCols * blockWidth + (blockCols - 1) * categoryGap + padding * 2;
+      const height = blockRows * blockHeight + (blockRows - 1) * categoryGap + padding * 2;
+
+      const palettes = [
+        { a: "#d86a47", b: "#f3b27c" },
+        { a: "#5a8d74", b: "#9fd2b1" },
+        { a: "#6a79c4", b: "#b4c6ff" },
+        { a: "#b8566d", b: "#f2a1b4" },
+        { a: "#c7923a", b: "#f4d393" },
+        { a: "#6f5b4b", b: "#c8b6a1" },
+        { a: "#4f7b8c", b: "#9dd0de" },
+        { a: "#6f6bb0", b: "#c5c1f2" },
+        { a: "#6b9a57", b: "#bfe3a4" },
+        { a: "#9a5f4f", b: "#f0b79e" }
+      ];
+
+      const svg = d3.select("svg").attr("viewBox", `0 0 ${width} ${height}`);
+      const zoomG = svg.append("g");
+      const root = zoomG.append("g").attr("transform", `translate(${padding}, ${padding})`);
+      const tooltip = d3.select("body").append("div").attr("class", "tooltip");
+
+      const zoom = d3.zoom()
+        .scaleExtent([0.002, 80])
+        .on("zoom", (event) => zoomG.attr("transform", event.transform));
+
+      svg.call(zoom);
+
+      const defs = svg.append("defs");
+      defs.selectAll("linearGradient")
+        .data(palettes)
+        .enter()
+        .append("linearGradient")
+        .attr("id", (d, i) => `grad-4-${i}`)
+        .attr("x1", "0%")
+        .attr("x2", "100%")
+        .attr("y1", "0%")
+        .attr("y2", "100%")
+        .each(function (d) {
+          d3.select(this)
+            .append("stop")
+            .attr("offset", "0%")
+            .attr("stop-color", d.a);
+          d3.select(this)
+            .append("stop")
+            .attr("offset", "100%")
+            .attr("stop-color", d.b);
+        });
+
+      const paletteByCategory = categories.map((cat, i) => ({
+        ...cat,
+        gradient: `url(#grad-4-${i % palettes.length})`
+      }));
+
+      const tiles = paletteByCategory.flatMap((cat, catIndex) => {
+        const blockCol = catIndex % blockCols;
+        const blockRow = Math.floor(catIndex / blockCols);
+        const blockX = blockCol * (blockWidth + categoryGap);
+        const blockY = blockRow * (blockHeight + categoryGap);
+
+        return d3.range(tilesPerCategory).map((i) => {
+          const col = i % tilesCols;
+          const row = Math.floor(i / tilesCols);
+          return {
+            id: `tile-${cat.id}-${i}`,
+            label: `IMAGE ${String(i + 1).padStart(3, "0")}`,
+            category: cat.name,
+            x: blockX + col * (tileSize + gap),
+            y: blockY + categoryLabelOffset + row * (tileSize + gap),
+            gradient: cat.gradient
+          };
+        });
+      });
+
+      const categoryLabels = root.selectAll(".category-label")
+        .data(paletteByCategory)
+        .enter()
+        .append("g")
+        .attr("transform", (d, i) => {
+          const blockCol = i % blockCols;
+          const blockRow = Math.floor(i / blockCols);
+          const blockX = blockCol * (blockWidth + categoryGap);
+          const blockY = blockRow * (blockHeight + categoryGap);
+          return `translate(${blockX}, ${blockY})`;
+        });
+
+      categoryLabels.append("text")
+        .attr("class", "category-label")
+        .attr("x", 0)
+        .attr("y", 24)
+        .text((d) => d.name);
+
+      categoryLabels.append("line")
+        .attr("class", "category-rule")
+        .attr("x1", 0)
+        .attr("y1", 44)
+        .attr("x2", blockWidth)
+        .attr("y2", 44);
+
+      const tileG = root.selectAll("g")
+        .data(tiles, (d) => d.id)
+        .enter()
+        .append("g")
+        .attr("class", "tile")
+        .attr("transform", (d) => `translate(${d.x}, ${d.y})`)
+        .on("mousemove", (event, d) => {
+          tooltip
+            .html(`<strong>${d.label}</strong><br/>${d.category}<br/>${tileSize}px x ${tileSize}px`)
+            .style("left", `${event.pageX + 14}px`)
+            .style("top", `${event.pageY - 12}px`)
+            .classed("show", true);
+        })
+        .on("mouseleave", () => tooltip.classed("show", false))
+        .on("click", (event, d) => {
+          const isActive = d3.select(event.currentTarget).classed("active");
+          tileG.classed("active", false).attr("transform", (t) => `translate(${t.x}, ${t.y})`);
+          if (!isActive) {
+            d3.select(event.currentTarget)
+              .classed("active", true)
+              .raise()
+              .attr("transform", `translate(${d.x - tileSize * 0.05}, ${d.y - tileSize * 0.05}) scale(1.1)`);
+          }
+        })
+        .on("dblclick", (event, d) => {
+          const { width: viewW, height: viewH } = svg.node().getBoundingClientRect();
+          const maxScale = zoom.scaleExtent()[1];
+          const tx = viewW / 2 - (d.x + tileSize / 2 + padding) * maxScale;
+          const ty = viewH / 2 - (d.y + tileSize / 2 + padding) * maxScale;
+          svg.transition()
+            .duration(600)
+            .call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(maxScale));
+        });
+
+      tileG.append("rect")
+        .attr("class", "tile-rect")
+        .attr("width", tileSize)
+        .attr("height", tileSize)
+        .attr("rx", 24)
+        .attr("ry", 24)
+        .attr("fill", (d) => d.gradient);
+    </script>
+  </body>
+</html>
