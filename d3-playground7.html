@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>D3 Playground 7</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      :root {
+        --bg: #0a0a0a;
+        --ink: #e6e6e6;
+        --muted: #8a8a8a;
+        --line: rgba(255, 255, 255, 0.18);
+      }
+      body {
+        margin: 0;
+        font-family: "Consolas", "Courier New", monospace;
+        background: var(--bg);
+        color: var(--ink);
+      }
+      .wrap {
+        max-width: 1400px;
+        margin: 14px auto 0;
+        padding: 0 16px 16px;
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 6px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+      }
+      p {
+        margin: 0 0 10px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .controls button {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: var(--ink);
+        padding: 4px 10px;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .controls button:hover {
+        border-color: rgba(255, 255, 255, 0.6);
+      }
+      .hidden {
+        display: none;
+      }
+      svg {
+        width: 100%;
+        height: 84vh;
+        background:
+          radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.05), transparent 55%),
+          radial-gradient(circle at 70% 80%, rgba(255, 255, 255, 0.04), transparent 60%),
+          var(--bg);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      .parent-square {
+        fill: rgba(255, 255, 255, 0.02);
+        stroke: rgba(255, 255, 255, 0.18);
+        stroke-width: 2;
+      }
+      .child-square {
+        fill: rgba(255, 255, 255, 0.03);
+        stroke: rgba(255, 255, 255, 0.25);
+        stroke-width: 1.5;
+      }
+      .tile {
+        fill: rgba(255, 255, 255, 0.03);
+        stroke: var(--line);
+        stroke-width: 2;
+      }
+      .tile-inner {
+        fill: none;
+        stroke: rgba(255, 255, 255, 0.14);
+        stroke-width: 1;
+      }
+      .tile-meta {
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        fill: rgba(255, 255, 255, 0.7);
+      }
+      .parent-label {
+        font-size: 14px;
+        letter-spacing: 0.3em;
+        fill: var(--muted);
+      }
+      .child-label {
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        fill: rgba(255, 255, 255, 0.45);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Hierarchical Square Packing</h1>
+      <p>Scroll: zoom / Drag: pan.</p>
+      <div class="controls hidden" id="controls">
+        <span>CSV読み込み失敗時は手動で選択</span>
+        <button id="loadCsv">Load CSV</button>
+        <input id="csvFile" type="file" accept=".csv" class="hidden" />
+      </div>
+      <svg></svg>
+    </div>
+    <script>
+      const tileSize = 512;
+      const tilesPerChild = 20;
+      const gridCols = 4;
+      const gap = 36;
+      const step = tileSize + gap;
+      const gridRows = Math.ceil(tilesPerChild / gridCols);
+      const gridW = gridCols * tileSize + (gridCols - 1) * gap;
+      const gridH = gridRows * tileSize + (gridRows - 1) * gap;
+      const childGap = 120;
+      const parentPadding = 60;
+      const innerPadding = 20;
+      const childPadding = parentPadding + innerPadding;
+      const childLabelSpace = 60;
+      const childSquareWidth = gridW + childPadding;
+      const childSquareHeight = gridH + childPadding + childLabelSpace;
+      const parentHeader = 60;
+      const parentGap = 240;
+
+      const parents = [
+        { id: "music", name: "音楽", color: "#8fd0ff" },
+        { id: "design", name: "デザイン", color: "#ffd28a" },
+        { id: "avatar", name: "アバター", color: "#d6a6ff" },
+        { id: "manga", name: "漫画", color: "#ff9ea8" },
+        { id: "made", name: "作ったもの", color: "#9ef0c4" },
+        { id: "photo", name: "写真", color: "#8ff3ff" },
+        { id: "anime", name: "アニメ", color: "#ffd7ff" }
+      ];
+
+      const svg = d3.select("svg");
+      const zoomG = svg.append("g");
+      const rootG = zoomG.append("g");
+      const controls = document.getElementById("controls");
+      const loadCsvButton = document.getElementById("loadCsv");
+      const csvFileInput = document.getElementById("csvFile");
+      const imageMeta = new Map();
+
+      const zoom = d3.zoom()
+        .scaleExtent([1, 40])
+        .on("zoom", (event) => zoomG.attr("transform", event.transform));
+
+      svg.call(zoom).on("dblclick.zoom", null);
+
+      function normalizeGenre(value) {
+        return (value || "").toString().trim();
+      }
+
+      function genreKey(value) {
+        return normalizeGenre(value).toLowerCase();
+      }
+
+      const parentMap = new Map([
+        ["music", "音楽"],
+        ["design", "デザイン"],
+        ["avatar", "アバター"],
+        ["avator", "アバター"],
+        ["manga", "漫画"],
+        ["make", "作ったもの"],
+        ["photo", "写真"],
+        ["shot", "写真"],
+        ["anime", "アニメ"]
+      ]);
+
+      function resolveParent(value) {
+        const name = normalizeGenre(value);
+        const key = genreKey(name);
+        return parentMap.get(key) || name;
+      }
+
+      function toImagePath(file) {
+        const name = (file || "").toString().trim();
+        if (!name) return "";
+        return `images/original/${encodeURIComponent(name)}`;
+      }
+
+      function normalizeRows(rows) {
+        return rows.map((row) => {
+          const cleaned = {};
+          Object.keys(row).forEach((key) => {
+            const trimmedKey = key.trim();
+            const value = typeof row[key] === "string" ? row[key].trim() : row[key];
+            cleaned[trimmedKey] = value;
+          });
+          return cleaned;
+        });
+      }
+
+      function resolutionText(d) {
+        if (!d.image) return "MOCK";
+        const meta = imageMeta.get(d.image);
+        if (!meta) return "LOADING";
+        if (!meta.w || !meta.h) return "MOCK";
+        return `${meta.w}x${meta.h}`;
+      }
+
+      function updateTileMeta() {
+        rootG.selectAll(".tile-meta")
+          .text((d) => resolutionText(d));
+        rootG.selectAll(".tile-image")
+          .attr("opacity", (d) => {
+            const meta = d.image ? imageMeta.get(d.image) : null;
+            if (!d.image) return 0;
+            if (!meta) return 1;
+            return meta.w && meta.h ? 1 : 0;
+          });
+      }
+
+      function loadImageMeta(paths) {
+        paths.forEach((path) => {
+          if (!path || imageMeta.has(path)) return;
+          const img = new Image();
+          img.onload = () => {
+            imageMeta.set(path, { w: img.naturalWidth, h: img.naturalHeight });
+            updateTileMeta();
+          };
+          img.onerror = () => {
+            imageMeta.set(path, { w: 0, h: 0 });
+            updateTileMeta();
+          };
+          img.src = path;
+        });
+      }
+
+      function buildGridPoints() {
+        return d3.range(tilesPerChild).map((i) => {
+          const col = i % gridCols;
+          const row = Math.floor(i / gridCols);
+          return {
+            x: (col - (gridCols - 1) / 2) * step,
+            y: (row - (gridRows - 1) / 2) * step
+          };
+        });
+      }
+
+      function buildParentLayout(parentList) {
+        const cols = Math.ceil(Math.sqrt(parentList.length));
+        const rows = Math.ceil(parentList.length / cols);
+        const sizes = parentList.map((parent) => {
+          const count = Math.max(1, parent.children.length);
+          const childCols = Math.ceil(Math.sqrt(count));
+          const childRows = Math.ceil(count / childCols);
+          return {
+            width: childCols * childSquareWidth + (childCols - 1) * childGap + parentPadding * 2 + innerPadding * 2,
+            height: parentHeader + childRows * childSquareHeight + (childRows - 1) * childGap + parentPadding * 2 + innerPadding * 2
+          };
+        });
+        const colWidths = Array(cols).fill(0);
+        const rowHeights = Array(rows).fill(0);
+        sizes.forEach((size, index) => {
+          const col = index % cols;
+          const row = Math.floor(index / cols);
+          colWidths[col] = Math.max(colWidths[col], size.width);
+          rowHeights[row] = Math.max(rowHeights[row], size.height);
+        });
+        const colOffsets = [];
+        const rowOffsets = [];
+        colWidths.reduce((acc, w, i) => {
+          colOffsets[i] = acc;
+          return acc + w + parentGap;
+        }, 0);
+        rowHeights.reduce((acc, h, i) => {
+          rowOffsets[i] = acc;
+          return acc + h + parentGap;
+        }, 0);
+        const width = colWidths.reduce((sum, w) => sum + w, 0) + parentGap * (cols - 1);
+        const height = rowHeights.reduce((sum, h) => sum + h, 0) + parentGap * (rows - 1);
+        return {
+          width,
+          height,
+          positions: parentList.map((parent, index) => {
+            const col = index % cols;
+            const row = Math.floor(index / cols);
+            const size = sizes[index];
+            return {
+              ...parent,
+              width: size.width,
+              height: size.height,
+              x: colOffsets[col],
+              y: rowOffsets[row]
+            };
+          })
+        };
+      }
+
+      function render(rows) {
+        const cleanedRows = normalizeRows(rows);
+        rootG.selectAll("*").remove();
+        svg.selectAll("defs.tile-defs").remove();
+
+        const parentList = parents.map((p) => ({ ...p, children: [] }));
+        const parentByName = new Map(parentList.map((p) => [p.name, p]));
+
+        cleanedRows.forEach((row) => {
+          const parentName = resolveParent(row.genre1);
+          const parent = parentByName.get(parentName);
+          if (!parent) return;
+          const childName = normalizeGenre(row.genre2) || "misc";
+          let child = parent.children.find((c) => c.name === childName);
+          if (!child) {
+            child = { id: `${parent.id}-${childName}`, name: childName, items: [] };
+            parent.children.push(child);
+          }
+          child.items.push(row);
+        });
+
+        parentList.forEach((parent) => {
+          if (!parent.children.length) {
+            parent.children.push({ id: `${parent.id}-mock`, name: "misc", items: [] });
+          }
+        });
+
+        const layout = buildParentLayout(parentList);
+        const viewWidth = layout.width + parentPadding * 2;
+        const viewHeight = layout.height + parentPadding * 2;
+        svg.attr("viewBox", `0 0 ${viewWidth} ${viewHeight}`);
+        rootG.attr("transform", `translate(${parentPadding}, ${parentPadding})`);
+
+        const parentSquares = rootG.selectAll(".parent")
+          .data(layout.positions, (d) => d.id)
+          .enter()
+          .append("g")
+          .attr("class", "parent")
+          .attr("transform", (d) => `translate(${d.x}, ${d.y})`);
+
+        parentSquares.append("rect")
+          .attr("class", "parent-square")
+          .attr("width", (d) => d.width)
+          .attr("height", (d) => d.height);
+
+        parentSquares.append("text")
+          .attr("class", "parent-label")
+          .attr("x", 28)
+          .attr("y", 48)
+          .text((d) => d.name);
+
+        const childSquares = [];
+        parentSquares.each(function (parent) {
+          const count = parent.children.length;
+          const cols = Math.ceil(Math.sqrt(count));
+          const rows = Math.ceil(count / cols);
+          const groupWidth = cols * childSquareWidth + (cols - 1) * childGap;
+          const groupHeight = rows * childSquareHeight + (rows - 1) * childGap;
+          const innerWidth = parent.width - parentPadding * 2 - innerPadding * 2;
+          const innerHeight = parent.height - parentPadding * 2 - parentHeader - innerPadding * 2;
+          const startX = parentPadding + innerPadding + (innerWidth - groupWidth) / 2;
+          const startY = parentPadding + parentHeader + innerPadding + (innerHeight - groupHeight) / 2;
+
+
+          parent.children.forEach((child, index) => {
+            const col = index % cols;
+            const row = Math.floor(index / cols);
+            const x = startX + col * (childSquareWidth + childGap);
+            const y = startY + row * (childSquareHeight + childGap);
+            childSquares.push({
+              ...child,
+              parentId: parent.id,
+              parentName: parent.name,
+              parentColor: parent.color,
+              parentX: parent.x,
+              parentY: parent.y,
+              x,
+              y,
+              width: childSquareWidth,
+              height: childSquareHeight
+            });
+          });
+        });
+
+        const childG = rootG.selectAll(".child")
+          .data(childSquares, (d) => d.id)
+          .enter()
+          .append("g")
+          .attr("class", "child")
+          .attr("transform", (d) => `translate(${d.parentX + d.x}, ${d.parentY + d.y})`);
+
+        childG.append("rect")
+          .attr("class", "child-square")
+          .attr("width", (d) => d.width)
+          .attr("height", (d) => d.height);
+
+        childG.append("text")
+          .attr("class", "child-label")
+          .attr("x", 24)
+          .attr("y", 38)
+          .text((d) => d.name);
+
+        const points = buildGridPoints();
+        const tiles = childSquares.flatMap((child) => {
+          const tiles = [];
+          for (let i = 0; i < tilesPerChild; i += 1) {
+            const row = child.items[i] || {};
+            const pt = points[i];
+            const baseX = child.parentX + child.x + child.width / 2;
+            const baseY = child.parentY + child.y + childLabelSpace + (child.height - childLabelSpace) / 2;
+            tiles.push({
+              id: `${child.id}-${i}`,
+              parent: child.parentName,
+              child: child.name,
+              color: child.parentColor,
+              image: toImagePath(row.image),
+              x: baseX + pt.x - tileSize / 2,
+              y: baseY + pt.y - tileSize / 2
+            });
+          }
+          return tiles;
+        });
+
+        const defs = svg.append("defs").attr("class", "tile-defs");
+        defs.selectAll("clipPath")
+          .data(tiles)
+          .enter()
+          .append("clipPath")
+          .attr("id", (d) => `clip-${d.id}`)
+          .append("rect")
+          .attr("width", tileSize)
+          .attr("height", tileSize)
+          .attr("rx", 18)
+          .attr("ry", 18);
+
+        const tileGroup = rootG.selectAll(".tile-group")
+          .data(tiles, (d) => d.id)
+          .enter()
+          .append("g")
+          .attr("class", "tile-group")
+          .attr("transform", (d) => `translate(${d.x}, ${d.y})`);
+
+        const tileFace = tileGroup.append("g")
+          .attr("class", "tile-face");
+
+        tileFace.append("image")
+          .attr("class", "tile-image")
+          .attr("width", tileSize)
+          .attr("height", tileSize)
+          .attr("href", (d) => d.image)
+          .attr("clip-path", (d) => `url(#clip-${d.id})`)
+          .attr("preserveAspectRatio", "xMidYMid slice")
+          .attr("opacity", (d) => (d.image ? 1 : 0));
+
+        tileFace.append("rect")
+          .attr("class", "tile")
+          .attr("width", tileSize)
+          .attr("height", tileSize)
+          .attr("rx", 18)
+          .attr("ry", 18)
+          .attr("fill", (d) => `${d.color}22`);
+
+        tileFace.append("rect")
+          .attr("class", "tile-inner")
+          .attr("x", 40)
+          .attr("y", 40)
+          .attr("width", tileSize - 80)
+          .attr("height", tileSize - 80)
+          .attr("rx", 12);
+
+        tileFace.append("text")
+          .attr("class", "tile-meta")
+          .attr("x", 44)
+          .attr("y", tileSize - 24)
+          .text((d) => resolutionText(d));
+
+        loadImageMeta(tiles.map((d) => d.image).filter(Boolean));
+      }
+
+      function handleCsvFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const text = reader.result;
+          const rows = d3.csvParse(text);
+          render(rows);
+        };
+        reader.readAsText(file);
+      }
+
+      loadCsvButton.addEventListener("click", () => csvFileInput.click());
+      csvFileInput.addEventListener("change", (event) => {
+        handleCsvFile(event.target.files[0]);
+      });
+
+      d3.csv("items.csv").then((rows) => {
+        render(rows);
+      }).catch((err) => {
+        console.error("Failed to load items.csv", err);
+        controls.classList.remove("hidden");
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>D3 Playground 6</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      :root {
+        --bg: #0a0a0a;
+        --ink: #e6e6e6;
+        --muted: #8a8a8a;
+        --line: rgba(255, 255, 255, 0.18);
+        --accent: #ffffff;
+      }
+      body {
+        margin: 0;
+        font-family: "Consolas", "Courier New", monospace;
+        background: var(--bg);
+        color: var(--ink);
+      }
+      .wrap {
+        max-width: 1400px;
+        margin: 14px auto 0;
+        padding: 0 16px 16px;
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 6px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+      }
+      p {
+        margin: 0 0 10px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .controls button {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: var(--ink);
+        padding: 4px 10px;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .controls button:hover {
+        border-color: rgba(255, 255, 255, 0.6);
+      }
+      .hidden {
+        display: none;
+      }
+      svg {
+        width: 100%;
+        height: 84vh;
+        background:
+          radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.05), transparent 55%),
+          radial-gradient(circle at 70% 80%, rgba(255, 255, 255, 0.04), transparent 60%),
+          var(--bg);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      .stage {
+        position: relative;
+      }
+      .tile {
+        fill: rgba(255, 255, 255, 0.03);
+        stroke: var(--line);
+        stroke-width: 2;
+      }
+      .tile.active {
+        stroke: var(--accent);
+        stroke-width: 4;
+      }
+      .tile-inner {
+        fill: none;
+        stroke: rgba(255, 255, 255, 0.14);
+        stroke-width: 1;
+      }
+      .tile-face {
+        transform-origin: center;
+        transform-box: fill-box;
+      }
+      .tile-meta {
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        fill: rgba(255, 255, 255, 0.7);
+      }
+      .cat-label {
+        font-size: 14px;
+        letter-spacing: 0.3em;
+        fill: var(--muted);
+      }
+      .preview {
+        position: absolute;
+        left: 50%;
+        top: 52%;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.96);
+        transition: opacity 0.12s ease, transform 0.12s ease;
+      }
+      .preview.show {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+      }
+      .preview-frame {
+        width: 512px;
+        height: 512px;
+        border: 2px solid rgba(255, 255, 255, 0.6);
+        box-shadow:
+          0 24px 60px rgba(0, 0, 0, 0.6),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.08);
+        background-size: 100% 100%;
+        background-position: center;
+        display: grid;
+        place-items: center;
+      }
+      .preview-label {
+        font-size: 12px;
+        letter-spacing: 0.2em;
+        color: rgba(255, 255, 255, 0.7);
+        margin-top: 10px;
+        text-align: center;
+      }
+      .preview-meta {
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        color: rgba(255, 255, 255, 0.5);
+        margin-top: 6px;
+        text-align: center;
+      }
+      .tooltip {
+        position: absolute;
+        pointer-events: none;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.85);
+        color: #fff;
+        font-size: 12px;
+        opacity: 0;
+        transform: translateY(6px);
+        transition: opacity 0.12s ease, transform 0.12s ease;
+      }
+      .tooltip.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Snowflake Layout</h1>
+      <p>Scroll: zoom / Drag: pan / Double click: focus on tile.</p>
+      <div class="controls hidden" id="controls">
+        <span>CSV読み込み失敗時は手動で選択</span>
+        <button id="loadCsv">Load CSV</button>
+        <input id="csvFile" type="file" accept=".csv" class="hidden" />
+      </div>
+      <div class="stage">
+        <svg></svg>
+        <div class="preview" id="preview">
+          <div class="preview-frame" id="previewFrame"></div>
+          <div class="preview-label" id="previewLabel"></div>
+          <div class="preview-meta" id="previewMeta"></div>
+        </div>
+      </div>
+    </div>
+    <script>
+      const tileSize = 512;
+      const tilesPerChild = 20;
+      const gridCols = 4;
+      const step = tileSize + 36;
+      const ringRadius = step * 4.4;
+      const width = 12000;
+      const height = 12000;
+      const baseTransform = "skewY(-10deg) skewX(4deg) rotate(-2deg)";
+
+      const palette = [
+        "#8fd0ff",
+        "#ffd28a",
+        "#d6a6ff",
+        "#ff9ea8",
+        "#9ef0c4",
+        "#8ff3ff",
+        "#ffd7ff",
+        "#b8c7ff",
+        "#ffc8f2",
+        "#b8ffd6"
+      ];
+
+      const svg = d3.select("svg").attr("viewBox", `0 0 ${width} ${height}`);
+      const zoomG = svg.append("g");
+      const root = zoomG.append("g").attr("transform", `translate(${width / 2}, ${height / 2})`);
+      const tooltip = d3.select("body").append("div").attr("class", "tooltip");
+      const preview = document.getElementById("preview");
+      const previewFrame = document.getElementById("previewFrame");
+      const previewLabel = document.getElementById("previewLabel");
+      const previewMeta = document.getElementById("previewMeta");
+      const controls = document.getElementById("controls");
+      const loadCsvButton = document.getElementById("loadCsv");
+      const csvFileInput = document.getElementById("csvFile");
+      const imageMeta = new Map();
+      let activeTileId = null;
+
+      const zoom = d3.zoom()
+        .scaleExtent([0.001, 60])
+        .on("zoom", (event) => zoomG.attr("transform", event.transform));
+
+      svg.call(zoom);
+
+      function gridPoints(count) {
+        const rows = Math.ceil(count / gridCols);
+        return d3.range(count).map((i) => {
+          const col = i % gridCols;
+          const row = Math.floor(i / gridCols);
+          return {
+            x: (col - (gridCols - 1) / 2) * step,
+            y: (row - (rows - 1) / 2) * step
+          };
+        });
+      }
+
+      function normalizeGenre(value) {
+        return (value || "").toString().trim();
+      }
+
+      function genreKey(value) {
+        return normalizeGenre(value).toLowerCase();
+      }
+
+      function extractHierarchy(rows) {
+        const parents = new Map();
+        rows.forEach((row) => {
+          const parentName = normalizeGenre(row.genre1);
+          if (!parentName) return;
+          const parentKey = genreKey(parentName);
+          if (!parents.has(parentKey)) {
+            parents.set(parentKey, { key: parentKey, name: parentName, children: new Map() });
+          }
+          const childName = normalizeGenre(row.genre2);
+          if (!childName) return;
+          const childKey = genreKey(childName);
+          const parent = parents.get(parentKey);
+          if (!parent.children.has(childKey)) {
+            parent.children.set(childKey, { key: childKey, name: childName });
+          }
+        });
+        return Array.from(parents.values()).map((item, i) => ({
+          id: `genre-${i}`,
+          key: item.key,
+          name: item.name,
+          color: palette[i % palette.length],
+          children: Array.from(item.children.values())
+        }));
+      }
+
+      function buildLayout(parents) {
+        if (!parents.length) return [];
+        const armCount = Math.max(0, parents.length - 1);
+        const stepAngle = armCount ? 360 / armCount : 360;
+        return parents.map((cat, i) => {
+          if (i === 0) {
+            return { ...cat, x: 0, y: 0, angle: 45, type: "center" };
+          }
+          const angle = stepAngle * (i - 1);
+          const rad = (angle * Math.PI) / 180;
+          return {
+            ...cat,
+            x: Math.cos(rad) * ringRadius,
+            y: Math.sin(rad) * ringRadius,
+            angle,
+            type: "arm"
+          };
+        });
+      }
+
+      function toImagePath(file) {
+        const name = (file || "").toString().trim();
+        if (!name) return "";
+        return `images/original/${encodeURIComponent(name)}`;
+      }
+
+      function normalizeRows(rows) {
+        return rows.map((row) => {
+          const cleaned = {};
+          Object.keys(row).forEach((key) => {
+            const trimmedKey = key.trim();
+            const value = typeof row[key] === "string" ? row[key].trim() : row[key];
+            cleaned[trimmedKey] = value;
+          });
+          return cleaned;
+        });
+      }
+
+      let rendered = false;
+
+      function resolutionText(d) {
+        if (!d.image) return "MOCK";
+        const meta = imageMeta.get(d.image);
+        if (!meta) return "LOADING";
+        if (!meta.w || !meta.h) return "MOCK";
+        return `${meta.w}x${meta.h}`;
+      }
+
+      function updatePreviewMeta(d) {
+        previewLabel.textContent = `${d.category} / ${d.id}`;
+        previewMeta.textContent = resolutionText(d);
+      }
+
+      function updatePreviewFrame(d) {
+        const maxW = window.innerWidth * 0.7;
+        const maxH = window.innerHeight * 0.7;
+        if (!d.image) {
+          const size = Math.min(tileSize, maxW, maxH);
+          previewFrame.style.width = `${size}px`;
+          previewFrame.style.height = `${size}px`;
+          previewFrame.style.backgroundSize = "100% 100%";
+          return;
+        }
+        const meta = imageMeta.get(d.image);
+        if (meta && meta.w && meta.h) {
+          const scale = Math.min(1, maxW / meta.w, maxH / meta.h);
+          previewFrame.style.width = `${Math.round(meta.w * scale)}px`;
+          previewFrame.style.height = `${Math.round(meta.h * scale)}px`;
+          previewFrame.style.backgroundSize = "100% 100%";
+        } else {
+          const size = Math.min(tileSize, maxW, maxH);
+          previewFrame.style.width = `${size}px`;
+          previewFrame.style.height = `${size}px`;
+          previewFrame.style.backgroundSize = "100% 100%";
+        }
+      }
+
+      function updateTileMeta() {
+        root.selectAll(".tile-meta")
+          .text((d) => resolutionText(d));
+        root.selectAll(".tile-image")
+          .attr("opacity", (d) => {
+            const meta = d.image ? imageMeta.get(d.image) : null;
+            if (!d.image) return 0;
+            if (!meta) return 1;
+            return meta.w && meta.h ? 1 : 0;
+          });
+        if (activeTileId) {
+          const active = root.selectAll(".tile-group").filter((d) => d.id === activeTileId).datum();
+          if (active) {
+            updatePreviewMeta(active);
+            updatePreviewFrame(active);
+          }
+        }
+      }
+
+      function loadImageMeta(paths) {
+        paths.forEach((path) => {
+          if (!path || imageMeta.has(path)) return;
+          const img = new Image();
+          img.onload = () => {
+            imageMeta.set(path, { w: img.naturalWidth, h: img.naturalHeight });
+            updateTileMeta();
+          };
+          img.onerror = () => {
+            imageMeta.set(path, { w: 0, h: 0 });
+            updateTileMeta();
+          };
+          img.src = path;
+        });
+      }
+
+      function render(rows) {
+        const cleanedRows = normalizeRows(rows);
+
+        if (rendered) {
+          root.selectAll("*").remove();
+          svg.selectAll("defs.tile-defs").remove();
+        }
+        rendered = true;
+
+        const parents = extractHierarchy(cleanedRows);
+        if (!parents.length) {
+          console.warn("No genre1 found in items.csv");
+          return;
+        }
+        const layout = buildLayout(parents);
+        const parentByKey = new Map(parents.map((cat) => [cat.key, cat]));
+
+        const withImage = cleanedRows.filter((d) => (d.image || "").trim());
+        const idRange = withImage.filter((d) => {
+          const id = Number(d.id);
+          return Number.isFinite(id) && id >= 1 && id <= 6;
+        });
+        const source = idRange.length ? idRange : withImage;
+
+        const grouped = new Map(parents.map((cat) => [cat.name, []]));
+        source.forEach((row) => {
+          const parentKey = genreKey(row.genre1);
+          const parent = parentByKey.get(parentKey);
+          if (!parent) return;
+          if (grouped.has(parent.name)) grouped.get(parent.name).push(row);
+        });
+
+        const tileData = layout.flatMap((cat) => {
+          const items = grouped.get(cat.name) || [];
+          const children = cat.children || [];
+          const byChild = new Map(children.map((child) => [child.key, []]));
+          const orderedKeys = children.map((child) => child.key);
+          const fallback = items.length ? items : source;
+
+          items.forEach((row) => {
+            const childKey = genreKey(row.genre2);
+            if (byChild.has(childKey)) {
+              byChild.get(childKey).push(row);
+            }
+          });
+
+          const expanded = [];
+          if (orderedKeys.length) {
+            orderedKeys.forEach((key) => {
+              const bucket = byChild.get(key) || [];
+              for (let i = 0; i < tilesPerChild; i += 1) {
+                expanded.push(bucket[i] || {});
+              }
+            });
+          } else {
+            for (let i = 0; i < tilesPerChild; i += 1) {
+              expanded.push(fallback[i] || {});
+            }
+          }
+
+          const points = gridPoints(expanded.length);
+          return points.map((pt, i) => {
+            const row = expanded[i] || {};
+            return {
+              id: `${cat.id}-${i}`,
+              category: cat.name,
+              color: cat.color,
+              image: toImagePath(row.image),
+              x: pt.x,
+              y: pt.y,
+              angle: cat.angle,
+              groupX: cat.x,
+              groupY: cat.y
+            };
+          });
+        });
+
+        const defs = svg.append("defs").attr("class", "tile-defs");
+        defs.selectAll("clipPath")
+          .data(tileData)
+          .enter()
+          .append("clipPath")
+          .attr("id", (d) => `clip-${d.id}`)
+          .append("rect")
+          .attr("width", tileSize)
+          .attr("height", tileSize)
+          .attr("rx", 18)
+          .attr("ry", 18);
+
+        const catG = root.selectAll(".cat")
+          .data(layout, (d) => d.id)
+          .enter()
+          .append("g")
+          .attr("class", "cat")
+          .attr("transform", (d) => `translate(${d.x}, ${d.y}) rotate(${d.angle})`);
+
+        catG.append("text")
+          .attr("class", "cat-label")
+          .attr("x", -120)
+          .attr("y", -step * 1.6)
+          .text((d) => d.name);
+
+        const tileG = root.selectAll(".tile-group")
+          .data(tileData, (d) => d.id)
+          .enter()
+          .append("g")
+          .attr("class", "tile-group")
+          .attr("transform", (d) => `translate(${d.groupX}, ${d.groupY}) rotate(${d.angle}) translate(${d.x}, ${d.y})`);
+
+        const tileFace = tileG.append("g")
+          .attr("class", "tile-face")
+          .style("transform", baseTransform);
+
+        tileFace.append("image")
+          .attr("class", "tile-image")
+          .attr("width", tileSize)
+          .attr("height", tileSize)
+          .attr("href", (d) => d.image)
+          .attr("clip-path", (d) => `url(#clip-${d.id})`)
+          .attr("preserveAspectRatio", "xMidYMid slice")
+          .attr("opacity", (d) => (d.image ? 1 : 0));
+
+        tileFace.append("rect")
+          .attr("class", "tile")
+          .attr("width", tileSize)
+          .attr("height", tileSize)
+          .attr("rx", 18)
+          .attr("ry", 18)
+          .attr("fill", (d) => `${d.color}22`);
+
+        tileFace.append("rect")
+          .attr("class", "tile-inner")
+          .attr("x", 40)
+          .attr("y", 40)
+          .attr("width", tileSize - 80)
+          .attr("height", tileSize - 80)
+          .attr("rx", 12);
+
+        tileFace.append("text")
+          .attr("class", "tile-meta")
+          .attr("x", 44)
+          .attr("y", tileSize - 24)
+          .text((d) => resolutionText(d));
+
+        tileG.attr("data-cat", (d) => d.category)
+          .on("mousemove", (event, d) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            const mx = (event.clientX - rect.left) / rect.width - 0.5;
+            const my = (event.clientY - rect.top) / rect.height - 0.5;
+            const tiltX = (my * -6).toFixed(2);
+            const tiltY = (mx * 6).toFixed(2);
+            d3.select(event.currentTarget)
+              .select(".tile-face")
+              .style("transform", `${baseTransform} perspective(900px) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`);
+
+            tooltip
+              .html(`<strong>${d.category}</strong><br/>${tileSize}px x ${tileSize}px`)
+              .style("left", `${event.pageX + 12}px`)
+              .style("top", `${event.pageY - 12}px`)
+              .classed("show", true);
+
+            const meta = d.image ? imageMeta.get(d.image) : null;
+            const hasImage = !!d.image && meta && meta.w && meta.h;
+            previewFrame.style.borderColor = d.color;
+            previewFrame.style.backgroundImage = hasImage ? `url("${d.image}")` : "none";
+            previewFrame.style.backgroundColor = hasImage ? "transparent" : `${d.color}22`;
+            updatePreviewMeta(d);
+            updatePreviewFrame(d);
+            activeTileId = d.id;
+            preview.classList.add("show");
+          })
+          .on("mouseleave", (event) => {
+            tooltip.classed("show", false);
+            d3.select(event.currentTarget)
+              .select(".tile-face")
+              .style("transform", baseTransform);
+            preview.classList.remove("show");
+            activeTileId = null;
+          })
+          .on("click", (event) => {
+            tileG.selectAll(".tile").classed("active", false);
+            d3.select(event.currentTarget).select(".tile").classed("active", true);
+          })
+          .on("dblclick", (event, d) => {
+            const { width: viewW, height: viewH } = svg.node().getBoundingClientRect();
+            const maxScale = zoom.scaleExtent()[1];
+            const local = d3.zoomIdentity
+              .translate(viewW / 2, viewH / 2)
+              .scale(maxScale)
+              .translate(-(d.groupX + d.x + tileSize / 2), -(d.groupY + d.y + tileSize / 2));
+            svg.transition().duration(600).call(zoom.transform, local);
+          });
+
+        loadImageMeta(tileData.map((d) => d.image).filter(Boolean));
+      }
+
+      function handleCsvFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const text = reader.result;
+          const rows = d3.csvParse(text);
+          render(rows);
+        };
+        reader.readAsText(file);
+      }
+
+      loadCsvButton.addEventListener("click", () => csvFileInput.click());
+      csvFileInput.addEventListener("change", (event) => {
+        handleCsvFile(event.target.files[0]);
+      });
+      window.addEventListener("resize", () => {
+        if (!activeTileId) return;
+        const active = root.selectAll(".tile-group").filter((d) => d.id === activeTileId).datum();
+        if (active) updatePreviewFrame(active);
+      });
+
+      d3.csv("items.csv").then((rows) => {
+        render(rows);
+      }).catch((err) => {
+        console.error("Failed to load items.csv", err);
+        controls.classList.remove("hidden");
+      });
+    </script>
+  </body>
+</html>
