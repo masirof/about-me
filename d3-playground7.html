@@ -92,13 +92,13 @@
         fill: rgba(255, 255, 255, 0.7);
       }
       .parent-label {
-        font-size: 14px;
+        font-size: 100px;
         letter-spacing: 0.3em;
         fill: var(--muted);
       }
       .child-label {
-        font-size: 11px;
-        letter-spacing: 0.16em;
+        font-size: 100px;
+        letter-spacing: 0.2em;
         fill: rgba(255, 255, 255, 0.45);
       }
     </style>
@@ -127,10 +127,10 @@
       const parentPadding = 60;
       const innerPadding = 20;
       const childPadding = parentPadding + innerPadding;
-      const childLabelSpace = 60;
+      const childLabelSpace = 220;
       const childSquareWidth = gridW + childPadding;
       const childSquareHeight = gridH + childPadding + childLabelSpace;
-      const parentHeader = 60;
+      const parentHeader = 220;
       const parentGap = 240;
 
       const parents = [
@@ -345,8 +345,8 @@
 
         parentSquares.append("text")
           .attr("class", "parent-label")
-          .attr("x", 28)
-          .attr("y", 48)
+          .attr("x", 60)
+          .attr("y", 110)
           .text((d) => d.name);
 
         const childSquares = [];
@@ -396,8 +396,8 @@
 
         childG.append("text")
           .attr("class", "child-label")
-          .attr("x", 24)
-          .attr("y", 38)
+          .attr("x", 60)
+          .attr("y", 110)
           .text((d) => d.name);
 
         const points = buildGridPoints();
