@@ -1,4 +1,4 @@
-id, title, url, image, genre1, genre2, comment
+id,title,url,image,genre1,genre2,comment
 1,,,1.jpg,shot,real,
 1,,,2.jpg,shot,real,
 3,,,3.jpg,shot,vrc,
@@ -7,13 +7,13 @@ id, title, url, image, genre1, genre2, comment
 6,,https://x.com/GuestSign/status/2007037493523399036?s=20,6.jpg,avator,reference,
 7,,https://x.com/Goosesletter/status/2007165942158242026?s=20,7.jpg,illustration,,
 8,,,8.jpg,avator,reference,
-https://soundcloud.com/sakuogt/longnightremix
-https://soundcloud.com/superultimategirl/kuusou
-https://soundcloud.com/ric3show3r/cv-feat-hirihiri-yaca-brickwall-ric3show3r-bootleg
-https://soundcloud.com/i5glkptvlhyz/savedata-13,,,,,,最高です
-https://soundcloud.com/venjaminchord/venjaminchord02,,,,,,かっけえやつ
-https://www.youtube.com/watch?v=-xH_wmyWi5w
-https://x.com/GuestSign/status/2007037493523399036?s=20
+9,ながいよる(feat.somunia)  [Saku Remix] by Saku,https://soundcloud.com/sakuogt/longnightremix,9.jpg,music,,
+10,【FREE DL】空奏列車(超絶最強美少女 Hardcore Bootleg) by 超絶最強美少女(superultimategirl),https://soundcloud.com/superultimategirl/kuusou,10.jpg,music,,
+11,"電音部, 大神 纏 (CV: 吉田凜音) feat. hirihiri & Yaca - Brickwall (ric3show3r Bootleg) by ric3show3r",https://soundcloud.com/ric3show3r/cv-feat-hirihiri-yaca-brickwall-ric3show3r-bootleg,11.jpg,music,,
+12,Savedata 13 by Re:少女ゲーム研究会,https://soundcloud.com/i5glkptvlhyz/savedata-13,12.jpg,music,,最高です
+13,□□□□□□□□ by venjaminchord,https://soundcloud.com/venjaminchord/venjaminchord02,13.jpg,music,,かっけえやつ
+https://www.youtube.com/watch?v=-xH_wmyWi5w,,,,,,
+https://x.com/GuestSign/status/2007037493523399036?s=20,,,,,,
 ,music,,,,,
 ,book,,,,,
 ,design,,,,,

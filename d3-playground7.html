@@ -300,13 +300,17 @@
 
       function render(rows) {
         const cleanedRows = normalizeRows(rows);
+        const filteredRows = cleanedRows.filter((row) => {
+          const id = Number(row.id);
+          return Number.isFinite(id);
+        });
         rootG.selectAll("*").remove();
         svg.selectAll("defs.tile-defs").remove();
 
         const parentList = parents.map((p) => ({ ...p, children: [] }));
         const parentByName = new Map(parentList.map((p) => [p.name, p]));
 
-        cleanedRows.forEach((row) => {
+        filteredRows.forEach((row) => {
           const parentName = resolveParent(row.genre1);
           const parent = parentByName.get(parentName);
           if (!parent) return;
