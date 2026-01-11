@@ -22,15 +22,21 @@
       *::after {
         box-sizing: border-box;
       }
+      html,
       body {
+        width: 100%;
+        height: 100%;
         margin: 0;
         font-family: "Trebuchet MS", "Lucida Sans Unicode", sans-serif;
         background: var(--bg);
         color: var(--ink);
+        overflow: hidden;
       }
       .frame {
-        max-width: 2800px;
-        margin: 12px auto 0;
+        width: 100%;
+        height: 100%;
+        max-width: none;
+        margin: 0;
         padding: 40px 48px 56px;
         position: relative;
         background:
@@ -249,7 +255,7 @@
         position: relative;
         width: var(--stat-bar-width);
         height: 18px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        border: none;
         background: #545454;
         overflow: hidden;
         box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.5);
@@ -377,7 +383,10 @@
         imageBox.append("img")
           .attr("alt", (d) => d.name || "")
           .attr("src", (d) => `images/original/${d.image}`)
-          .attr("class", (d) => imageKey(d.image));
+          .attr("class", (d) => imageKey(d.image))
+          .on("load", () => {
+            fitToFrame();
+          });
 
         const info = units.append("div").attr("class", "info-block");
         info.append("div")
@@ -452,27 +461,56 @@
       });
 
       const zoom = d3.zoom()
-        .scaleExtent([0.3, 3])
+        .scaleExtent([0.01, 3])
         .on("zoom", (event) => {
           viewport.style("transform", `translate(${event.transform.x}px, ${event.transform.y}px) scale(${event.transform.k})`);
         });
 
       function fitToFrame() {
+        viewport.style("transform", "translate(0px, 0px) scale(1)");
         const frameNode = frame.node();
         const frameWidth = frameNode.clientWidth;
+        const frameHeight = frameNode.clientHeight;
         const frameStyle = window.getComputedStyle(frameNode);
         const paddingLeft = parseFloat(frameStyle.paddingLeft) || 0;
         const paddingRight = parseFloat(frameStyle.paddingRight) || 0;
+        const paddingTop = parseFloat(frameStyle.paddingTop) || 0;
+        const paddingBottom = parseFloat(frameStyle.paddingBottom) || 0;
         const innerWidth = frameWidth - paddingLeft - paddingRight;
-        const contentWidth = rig.node().scrollWidth;
-        if (!frameWidth || !contentWidth || innerWidth <= 0) return;
-        const scale = Math.min(1, innerWidth / contentWidth);
+        const innerHeight = frameHeight - paddingTop - paddingBottom;
+        const rigNode = rig.node();
+        const viewportNode = viewport.node();
+        const rect = viewportNode.getBoundingClientRect();
+        const contentWidth = Math.max(
+          rect.width,
+          rigNode.scrollWidth,
+          viewportNode.scrollWidth,
+          viewportNode.offsetWidth
+        );
+        const contentHeight = Math.max(
+          rect.height,
+          viewportNode.scrollHeight,
+          viewportNode.offsetHeight
+        );
+        if (!frameWidth || !frameHeight || !contentWidth || !contentHeight || innerWidth <= 0 || innerHeight <= 0) return;
+        const scale = Math.min(1, innerWidth / contentWidth, innerHeight / contentHeight);
         const tx = paddingLeft + Math.max(0, (innerWidth - contentWidth * scale) / 2);
-        frame.call(zoom.transform, d3.zoomIdentity.translate(tx, 0).scale(scale));
+        const ty = paddingTop + Math.max(0, (innerHeight - contentHeight * scale) / 2);
+        frame.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
       }
 
       frame.call(zoom);
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => {
+          fitToFrame();
+        });
+      }
+      const resizeObserver = new ResizeObserver(() => {
+        fitToFrame();
+      });
+      resizeObserver.observe(viewport.node());
       window.addEventListener("resize", fitToFrame);
+      window.addEventListener("load", fitToFrame);
     </script>
   </body>
 </html>

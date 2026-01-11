@@ -11,20 +11,29 @@
         --muted: #8a8a8a;
         --line: rgba(255, 255, 255, 0.18);
       }
+      html,
       body {
+        height: 100%;
         margin: 0;
         font-family: "Consolas", "Courier New", monospace;
         background: var(--bg);
         color: var(--ink);
+        overflow: hidden;
       }
       .wrap {
-        max-width: 1400px;
-        margin: 14px auto 0;
-        padding: 0 16px 16px;
+        max-width: none;
+        width: 100%;
+        margin: 0;
+        padding: 14px 0 16px;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
       }
       h1 {
         font-size: 14px;
         margin: 0 0 6px;
+        padding: 0 16px;
         letter-spacing: 0.2em;
         text-transform: uppercase;
       }
@@ -32,6 +41,7 @@
         margin: 0 0 10px;
         color: var(--muted);
         font-size: 11px;
+        padding: 0 16px;
       }
       .controls {
         display: flex;
@@ -40,6 +50,7 @@
         margin-bottom: 10px;
         font-size: 11px;
         color: var(--muted);
+        padding: 0 16px;
       }
       .controls button {
         background: transparent;
@@ -57,9 +68,67 @@
       .hidden {
         display: none;
       }
-      svg {
+      .stage {
+        display: grid;
+        grid-template-columns: minmax(280px, 38%) minmax(0, 1fr);
+        gap: 16px;
+        align-items: stretch;
+        flex: 1;
+        min-height: 0;
+      }
+      .preview {
+        height: 100%;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 35%),
+          radial-gradient(circle at 35% 20%, rgba(255, 255, 255, 0.06), transparent 60%),
+          var(--bg);
+        box-shadow: inset 0 0 24px rgba(255, 255, 255, 0.04);
+        min-height: 0;
+      }
+      .preview-inner {
+        height: 100%;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        gap: 10px;
+        padding: 14px;
+        min-height: 0;
+      }
+      .preview-media {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        min-height: 0;
+        overflow: hidden;
+      }
+      .preview-label {
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .preview-image {
         width: 100%;
-        height: 84vh;
+        height: 100%;
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+      .preview.is-empty .preview-image {
+        opacity: 0;
+      }
+      .preview-caption {
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        color: var(--muted);
+        min-height: 14px;
+      }
+      .canvas svg {
+        width: 100%;
+        height: 100%;
         background:
           radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.05), transparent 55%),
           radial-gradient(circle at 70% 80%, rgba(255, 255, 255, 0.04), transparent 60%),
@@ -101,6 +170,21 @@
         letter-spacing: 0.2em;
         fill: rgba(255, 255, 255, 0.45);
       }
+      .tile-group {
+        cursor: pointer;
+      }
+      @media (max-width: 1100px) {
+        .stage {
+          grid-template-columns: 1fr;
+          grid-template-rows: 40% 60%;
+        }
+        .preview {
+          height: 100%;
+        }
+        .canvas svg {
+          height: 100%;
+        }
+      }
     </style>
   </head>
   <body>
@@ -112,7 +196,20 @@
         <button id="loadCsv">Load CSV</button>
         <input id="csvFile" type="file" accept=".csv" class="hidden" />
       </div>
-      <svg></svg>
+      <div class="stage">
+        <div class="preview is-empty" id="preview">
+          <div class="preview-inner">
+            <div class="preview-label">Preview</div>
+            <div class="preview-media">
+              <img class="preview-image" id="previewImage" alt="" />
+            </div>
+            <div class="preview-caption" id="previewCaption">Select a tile</div>
+          </div>
+        </div>
+        <div class="canvas">
+          <svg></svg>
+        </div>
+      </div>
     </div>
     <script>
       const tileSize = 512;
@@ -149,13 +246,20 @@
       const controls = document.getElementById("controls");
       const loadCsvButton = document.getElementById("loadCsv");
       const csvFileInput = document.getElementById("csvFile");
+      const preview = document.getElementById("preview");
+      const previewImage = document.getElementById("previewImage");
+      const previewCaption = document.getElementById("previewCaption");
       const imageMeta = new Map();
+      let currentTile = null;
 
       const zoom = d3.zoom()
         .scaleExtent([1, 40])
         .on("zoom", (event) => zoomG.attr("transform", event.transform));
 
       svg.call(zoom).on("dblclick.zoom", null);
+      svg.on("click", () => {
+        clearPreview();
+      });
 
       function normalizeGenre(value) {
         return (value || "").toString().trim();
@@ -219,6 +323,9 @@
             if (!meta) return 1;
             return meta.w && meta.h ? 1 : 0;
           });
+        if (currentTile) {
+          renderPreview(currentTile);
+        }
       }
 
       function loadImageMeta(paths) {
@@ -235,6 +342,32 @@
           };
           img.src = path;
         });
+      }
+
+      function renderPreview(tile) {
+        currentTile = tile;
+        const hasImage = tile && tile.image;
+        if (!hasImage) {
+          preview.classList.add("is-empty");
+          previewImage.removeAttribute("src");
+          previewCaption.textContent = "NO IMAGE";
+          return;
+        }
+        const meta = imageMeta.get(tile.image);
+        const resolution = meta && meta.w && meta.h ? `${meta.w}x${meta.h}` : "LOADING";
+        const label = [tile.parent, tile.child].filter(Boolean).join(" / ");
+        preview.classList.remove("is-empty");
+        previewImage.src = tile.image;
+        previewImage.alt = label;
+        previewCaption.textContent = `${label}${label ? " · " : ""}${resolution}`;
+      }
+
+      function clearPreview() {
+        currentTile = null;
+        preview.classList.add("is-empty");
+        previewImage.removeAttribute("src");
+        previewImage.alt = "";
+        previewCaption.textContent = "Select a tile";
       }
 
       function buildGridPoints() {
@@ -306,6 +439,7 @@
         });
         rootG.selectAll("*").remove();
         svg.selectAll("defs.tile-defs").remove();
+        clearPreview();
 
         const parentList = parents.map((p) => ({ ...p, children: [] }));
         const parentByName = new Map(parentList.map((p) => [p.name, p]));
@@ -442,7 +576,11 @@
           .enter()
           .append("g")
           .attr("class", "tile-group")
-          .attr("transform", (d) => `translate(${d.x}, ${d.y})`);
+          .attr("transform", (d) => `translate(${d.x}, ${d.y})`)
+          .on("click", (event, d) => {
+            event.stopPropagation();
+            renderPreview(d);
+          });
 
         const tileFace = tileGroup.append("g")
           .attr("class", "tile-face");
