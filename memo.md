@@ -43,6 +43,8 @@
 # items.csv AI用
 - uv環境ある　/scripts/fetch_soundcloud.py を作成してほしい items.csvを読み取って、idカラムに入っているsoundcloud.comがついているurlをhttps://soundcloud.com/oembed?format=json&url={ここにurl}にしてoembed取得して、タイトルと画像を取得して、items.csvに書き込んでほしい　画像は/images/original/　idカラムは最大値+1したものを入れて　titleカラムはタイトルを入れて　imageカラムに画像を入れてほしい genre1にはmusicを入れて commentカラムに値があったら、そのままcommentカラムに値を入れて
 
+# ゲームっぽいカメラとレンズ一覧
+- 
 # AI用
 - d3-playground2.html にズームイン、ズームアウト、ドラッグ、d3-forceいらない、円ごとにカテゴリ分け、カテゴリ円の中に画像のモックを入れて、カテゴリ5つ、各画像モック20個 画像もっとズームインできるようにして　画像モックの大きさ512px*512px 画像モック同士の隙間を空けて、きれいに整列　画像モックを全部表示できる円カテゴリサイズにして　
 - d3-playground2.html　Disjoint force-directed graphにして、画像モックを点ノードにしてみて画像モックの大きさ512px*512px　線は1つ　もうちょい線を太くして　もうちょいカテゴリごとにバラして
@@ -60,3 +62,9 @@
 - d3-playground7.html　画像モックの大きさ512px*512pxは絶対　画像の間はスペースを開けたい　genre1が親でgenre2が子　画像ファイルがないところはモックにしてね items.csvのカテゴリ+モックの数で子カテゴリを作成し、合計20枚になるようにして　インタラクティブ操作　各子カテゴリに画像20枚　親カテゴリは音楽、デザイン、アバター、漫画、作ったもの、写真、アニメ　子カテゴリは適当で　Zoomable circle packingにしたい(クリックで拡大じゃなくて、スクロールで拡大)
 
 - items.csvを更新したから、d3-playgroud7.htmlを更新して
+
+- d3-camera1.html にモニターグラフィックスっぽい感じでカメラとレンズを並べてほしい　/images/original/画像ファイルを参照して　(左)cb1 cl1 cl2 cl3 cl4の順で camera_ui.csvのimageカラムにファイル名がある　camera_ui.csvの情報を使用して、かっこよく表示してほしい　全体が横長バージョン cb1上に30px上げて　cl1 30%縮小,上に10%上げて cl2,30%縮小,上に20%上げて cl3,50%縮小 cl4,10%縮小,上に40%上げて
+
+- d3-camera1.html にモニターグラフィックスっぽい感じでカメラとレンズを並べてほしい　/images/original/画像ファイルを参照して　(左)cb1 cl1 cl2 cl3 cl4の順で camera_ui.csvのimageカラムにファイル名がある　camera_ui.csvの情報を使用して、かっこよく表示してほしい　全体が横長バージョン ウィンドウを縮小しても画像ズレないようにして 
+
+- d3-playground7.html　みたいなインタラクティブ操作の感じに　d3-camera1.htmlをして
