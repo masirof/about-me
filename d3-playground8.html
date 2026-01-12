@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>D3 Playground 8 - PureRef Board</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      :root {
+        --bg: #0b0c10;
+        --panel: rgba(14, 16, 24, 0.9);
+        --ink: #eef1f7;
+        --muted: #8a90a3;
+        --line: rgba(255, 255, 255, 0.14);
+        --accent: #9bd4ff;
+        --shadow: rgba(0, 0, 0, 0.4);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: "Zen Kaku Gothic New", "Yu Gothic", "Meiryo", sans-serif;
+        background: radial-gradient(circle at 20% 10%, rgba(90, 130, 255, 0.12), transparent 55%),
+          radial-gradient(circle at 80% 80%, rgba(255, 160, 90, 0.1), transparent 60%),
+          var(--bg);
+        color: var(--ink);
+        overflow: hidden;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 18px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: var(--panel);
+      }
+      h1 {
+        font-size: 16px;
+        letter-spacing: 0.18em;
+        margin: 0 0 6px;
+        text-transform: uppercase;
+      }
+      p {
+        margin: 0;
+        font-size: 15px;
+        color: var(--muted);
+      }
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 15px;
+        color: var(--muted);
+      }
+      .controls button {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        color: var(--ink);
+        padding: 6px 12px;
+        font-size: 15px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .controls button:hover {
+        border-color: rgba(255, 255, 255, 0.6);
+      }
+      .controls input {
+        display: none;
+      }
+      .canvas {
+        height: calc(100vh - 72px);
+      }
+      svg {
+        width: 100%;
+        height: 100%;
+        cursor: grab;
+        background: radial-gradient(circle at 10% 10%, rgba(255, 255, 255, 0.04), transparent 40%),
+          radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.05), transparent 45%),
+          rgba(8, 10, 16, 0.95);
+      }
+      svg:active {
+        cursor: grabbing;
+      }
+      .category-box {
+        fill: rgba(255, 255, 255, 0.02);
+        stroke: rgba(255, 255, 255, 0.18);
+        stroke-width: 2;
+        rx: 18;
+        ry: 18;
+      }
+      .category-title {
+        font-size: 80px;
+        letter-spacing: 0.22em;
+        fill: var(--ink);
+      }
+      .sub-box {
+        fill: rgba(255, 255, 255, 0.02);
+        stroke: rgba(255, 255, 255, 0.12);
+        stroke-width: 1;
+        rx: 14;
+        ry: 14;
+      }
+      .sub-title {
+        font-size: 80px;
+        letter-spacing: 0.12em;
+        fill: var(--muted);
+      }
+      .tile-frame {
+        fill: rgba(10, 12, 18, 0.9);
+        stroke: rgba(255, 255, 255, 0.12);
+        stroke-width: 1;
+      }
+      .tile-title {
+        font-size: 25px;
+        fill: rgba(255, 255, 255, 0.7);
+        pointer-events: none;
+      }
+      .tile-shadow {
+        filter: drop-shadow(0 10px 18px var(--shadow));
+      }
+      .tile-group:hover .tile-frame {
+        stroke: rgba(255, 255, 255, 0.4);
+      }
+      .tile-group.dragging .tile-frame {
+        stroke: var(--accent);
+      }
+      .note {
+        font-size: 30px;
+        fill: rgba(255, 255, 255, 0.4);
+      }
+      @media (max-width: 900px) {
+        header {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+        .canvas {
+          height: calc(100vh - 96px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>PureRef風イメージボード</h1>
+        <p>ホイール: ズーム / ドラッグ: パン</p>
+      </div>
+      <div class="controls" id="controls">
+        <span>CSVが読めない場合は手動読み込み</span>
+        <button id="loadCsv">CSVを読み込む</button>
+        <input id="csvFile" type="file" accept=".csv" />
+      </div>
+    </header>
+    <div class="canvas">
+      <svg></svg>
+    </div>
+    <script>
+      const ui = {
+        tileGap: 16,
+        subPadding: 18,
+        subTitleHeight: 30,
+        subGap: 36,
+        catPadding: 28,
+        catHeader: 50,
+        catGap: 90,
+        maxSubRowWidth: 1200,
+        fallbackSize: 240
+      };
+
+      const palette = [
+        "#8fd0ff",
+        "#ffd28a",
+        "#d6a6ff",
+        "#ff9ea8",
+        "#9ef0c4",
+        "#8ff3ff",
+        "#ffd7ff",
+        "#b9ff9e"
+      ];
+
+      const labelMap = new Map([
+        ["music", "音楽"],
+        ["design", "デザイン"],
+        ["avatar", "アバター"],
+        ["avator", "アバター"],
+        ["manga", "漫画"],
+        ["make", "制作"],
+        ["made", "制作"],
+        ["photo", "写真"],
+        ["shot", "写真"],
+        ["anime", "アニメ"],
+        ["illustration", "イラスト"],
+        ["book", "本"],
+        ["good", "好き"]
+      ]);
+
+      const svg = d3.select("svg");
+      const zoomG = svg.append("g");
+      const rootG = zoomG.append("g");
+      const controls = document.getElementById("controls");
+      const loadCsvButton = document.getElementById("loadCsv");
+      const csvFileInput = document.getElementById("csvFile");
+      let currentTransform = d3.zoomIdentity;
+      const imageMeta = new Map();
+      // const scaleClamp = { min: 1, max: 1 };
+      const scaleClamp = { min: 0.7, max: 1.5 };
+      const initialScale = 0.9;
+      const initialPadding = 40;
+
+      const zoom = d3.zoom()
+        .scaleExtent([0.4, 6])
+        .on("zoom", (event) => {
+          currentTransform = event.transform;
+          zoomG.attr("transform", currentTransform);
+        });
+
+      svg.call(zoom).on("dblclick.zoom", null);
+
+      function normalizeText(value) {
+        return (value || "").toString().trim();
+      }
+
+      function categoryLabel(value) {
+        const key = normalizeText(value).toLowerCase();
+        return labelMap.get(key) || normalizeText(value) || "未分類";
+      }
+
+      function toImagePath(file) {
+        const name = normalizeText(file);
+        if (!name) return "";
+        return `images/original/${encodeURIComponent(name)}`;
+      }
+
+      function normalizeRows(rows) {
+        return rows.map((row) => {
+          const cleaned = {};
+          Object.keys(row).forEach((key) => {
+            const trimmedKey = key.trim();
+            const value = typeof row[key] === "string" ? row[key].trim() : row[key];
+            cleaned[trimmedKey] = value;
+          });
+          return cleaned;
+        });
+      }
+
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function computeScale(w, h, target) {
+        const longEdge = Math.max(w, h);
+        if (!longEdge) return 1;
+        return clamp(target / longEdge, scaleClamp.min, scaleClamp.max);
+      }
+
+      function applyInitialZoom() {
+        const transform = d3.zoomIdentity.translate(initialPadding, initialPadding).scale(initialScale);
+        svg.call(zoom.transform, transform);
+      }
+
+      function buildSubLayout(sub) {
+        const count = sub.items.length || 1;
+        const targetRows = Math.max(1, Math.ceil(Math.sqrt(count)));
+        const rows = Array.from({ length: targetRows }, () => ({
+          items: [],
+          width: 0,
+          height: 0
+        }));
+        sub.items.forEach((item, index) => {
+          const row = rows[index % targetRows];
+          row.items.push(item);
+          row.width += (row.items.length > 1 ? ui.tileGap : 0) + item.w;
+          row.height = Math.max(row.height, item.h);
+        });
+        const activeRows = rows.filter((row) => row.items.length);
+        const finalRows = activeRows.length ? activeRows : [{ items: [], width: ui.fallbackSize, height: ui.fallbackSize }];
+        const maxRowWidth = finalRows.reduce((max, row) => Math.max(max, row.width), 0);
+        const contentHeight = finalRows.reduce((sum, row) => sum + row.height, 0) + ui.tileGap * (finalRows.length - 1);
+        const width = ui.subPadding * 2 + maxRowWidth;
+        const height = ui.subPadding * 2 + ui.subTitleHeight + contentHeight;
+        return { rows: finalRows, width, height };
+      }
+
+      function layoutCategory(category) {
+        const subLayouts = category.subcategories.map((sub) => ({
+          ...sub,
+          layout: buildSubLayout(sub)
+        }));
+        const count = Math.max(1, subLayouts.length);
+        const cols = Math.ceil(Math.sqrt(count));
+        const rows = Math.ceil(count / cols);
+        const colWidths = Array(cols).fill(0);
+        const rowHeights = Array(rows).fill(0);
+        subLayouts.forEach((sub, index) => {
+          const col = index % cols;
+          const row = Math.floor(index / cols);
+          colWidths[col] = Math.max(colWidths[col], sub.layout.width);
+          rowHeights[row] = Math.max(rowHeights[row], sub.layout.height);
+        });
+        const colOffsets = [];
+        const rowOffsets = [];
+        colWidths.reduce((acc, w, i) => {
+          colOffsets[i] = acc;
+          return acc + w + ui.subGap;
+        }, 0);
+        rowHeights.reduce((acc, h, i) => {
+          rowOffsets[i] = acc;
+          return acc + h + ui.subGap;
+        }, 0);
+        const contentWidth = Math.max(
+          360,
+          colWidths.reduce((sum, w) => sum + w, 0) + ui.subGap * (cols - 1)
+        );
+        const contentHeight = rowHeights.reduce((sum, h) => sum + h, 0) + ui.subGap * (rows - 1);
+        const width = contentWidth + ui.catPadding * 2;
+        const height = contentHeight + ui.catPadding * 2 + ui.catHeader;
+        return {
+          ...category,
+          width,
+          height,
+          subcategories: subLayouts.map((sub, index) => {
+            const col = index % cols;
+            const row = Math.floor(index / cols);
+            return {
+              ...sub,
+              x: colOffsets[col] + ui.catPadding,
+              y: rowOffsets[row] + ui.catHeader + ui.catPadding
+            };
+          })
+        };
+      }
+
+      function layoutBoard(categories) {
+        const columnCount = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(categories.length))));
+        const columns = Array.from({ length: columnCount }, () => ({
+          height: 0,
+          width: 0,
+          items: []
+        }));
+        categories.forEach((cat) => {
+          let target = columns[0];
+          let targetIndex = 0;
+          columns.forEach((col, index) => {
+            if (col.height < target.height) {
+              target = col;
+              targetIndex = index;
+            }
+          });
+          cat.column = targetIndex;
+          cat.y = target.height;
+          target.height += cat.height + ui.catGap;
+          target.width = Math.max(target.width, cat.width);
+        });
+        const xOffsets = [];
+        columns.reduce((acc, col, index) => {
+          xOffsets[index] = acc;
+          return acc + col.width + ui.catGap;
+        }, 0);
+        const width = columns.reduce((sum, col) => sum + col.width, 0) + ui.catGap * (columns.length - 1);
+        const height = Math.max(...columns.map((col) => col.height)) - ui.catGap;
+        return { xOffsets, width, height };
+      }
+
+      function loadImageMeta(paths) {
+        const uniques = Array.from(new Set(paths.filter(Boolean)));
+        return Promise.all(uniques.map((path) => new Promise((resolve) => {
+          if (imageMeta.has(path)) {
+            resolve();
+            return;
+          }
+          const img = new Image();
+          img.onload = () => {
+            imageMeta.set(path, {
+              w: img.naturalWidth || ui.fallbackSize,
+              h: img.naturalHeight || ui.fallbackSize
+            });
+            resolve();
+          };
+          img.onerror = () => {
+            imageMeta.set(path, { w: ui.fallbackSize, h: ui.fallbackSize });
+            resolve();
+          };
+          img.src = path;
+        })));
+      }
+
+      async function render(rows) {
+        rootG.selectAll("*").remove();
+        const cleanedRows = normalizeRows(rows);
+        const validRows = cleanedRows.filter((row) => normalizeText(row.image));
+        const imagePaths = validRows.map((row) => toImagePath(row.image));
+        await loadImageMeta(imagePaths);
+        const longEdges = imagePaths
+          .map((path) => imageMeta.get(path))
+          .filter(Boolean)
+          .map((meta) => Math.max(meta.w, meta.h))
+          .sort((a, b) => a - b);
+        const targetEdge = longEdges.length
+          ? longEdges[Math.floor(longEdges.length / 2)]
+          : ui.fallbackSize;
+
+        const categoryMap = new Map();
+        validRows.forEach((row) => {
+          const catKey = normalizeText(row.genre1);
+          const catLabel = categoryLabel(catKey);
+          if (!categoryMap.has(catLabel)) {
+            categoryMap.set(catLabel, []);
+          }
+          categoryMap.get(catLabel).push(row);
+        });
+
+        const categories = Array.from(categoryMap.entries()).map(([name, items], index) => {
+          const subMap = new Map();
+          items.forEach((row) => {
+            const subKey = normalizeText(row.genre2) || "その他";
+            if (!subMap.has(subKey)) {
+              subMap.set(subKey, []);
+            }
+            subMap.get(subKey).push(row);
+          });
+          const subcategories = Array.from(subMap.entries()).map(([subName, subItems]) => {
+            const items = subItems.map((item) => {
+              const imagePath = toImagePath(item.image);
+              const meta = imageMeta.get(imagePath) || { w: ui.fallbackSize, h: ui.fallbackSize };
+              const scale = computeScale(meta.w, meta.h, targetEdge);
+              return {
+                ...item,
+                imagePath,
+                w: meta.w * scale,
+                h: meta.h * scale
+              };
+            });
+            return {
+              id: `${name}-${subName}`,
+              name: subName,
+              items
+            };
+          });
+          return {
+            id: `cat-${name}`,
+            name,
+            color: palette[index % palette.length],
+            subcategories
+          };
+        });
+
+        const layoutCategories = categories.map(layoutCategory);
+        const board = layoutBoard(layoutCategories);
+        const viewWidth = Math.max(1200, board.width + ui.catPadding * 2);
+        const viewHeight = Math.max(800, board.height + ui.catPadding * 2);
+        svg.attr("viewBox", `0 0 ${viewWidth} ${viewHeight}`);
+
+        const categoryGroups = rootG.selectAll(".category")
+          .data(layoutCategories, (d) => d.id)
+          .enter()
+          .append("g")
+          .attr("class", "category")
+          .attr("transform", (d) => `translate(${board.xOffsets[d.column]}, ${d.y})`);
+
+        categoryGroups.append("rect")
+          .attr("class", "category-box")
+          .attr("width", (d) => d.width)
+          .attr("height", (d) => d.height);
+
+        categoryGroups.append("text")
+          .attr("class", "category-title")
+          .attr("x", ui.catPadding)
+          .attr("y", 34)
+          .text((d) => d.name);
+
+        const subGroups = categoryGroups.selectAll(".sub")
+          .data((d) => d.subcategories)
+          .enter()
+          .append("g")
+          .attr("class", "sub")
+          .attr("transform", (d) => `translate(${d.x}, ${d.y})`);
+
+        subGroups.append("rect")
+          .attr("class", "sub-box")
+          .attr("width", (d) => d.layout.width)
+          .attr("height", (d) => d.layout.height);
+
+        subGroups.append("text")
+          .attr("class", "sub-title")
+          .attr("x", ui.subPadding)
+          .attr("y", ui.subPadding + 16)
+          .text((d) => d.name);
+
+        const tiles = [];
+        layoutCategories.forEach((category) => {
+          category.subcategories.forEach((sub) => {
+            let rowY = 0;
+            sub.layout.rows.forEach((row) => {
+              let rowX = 0;
+              row.items.forEach((item, idx) => {
+                const x = board.xOffsets[category.column] + sub.x + ui.subPadding + rowX;
+                const y = category.y + sub.y + ui.subPadding + ui.subTitleHeight + rowY;
+                tiles.push({
+                  id: `${category.id}-${sub.id}-${idx}`,
+                  x,
+                  y,
+                  w: item.w,
+                  h: item.h,
+                  title: normalizeText(item.title) || normalizeText(item.image),
+                  image: item.imagePath
+                });
+                rowX += item.w + ui.tileGap;
+              });
+              rowY += row.height + ui.tileGap;
+            });
+          });
+        });
+
+        const tileGroups = rootG.selectAll(".tile-group")
+          .data(tiles, (d) => d.id)
+          .enter()
+          .append("g")
+          .attr("class", "tile-group tile-shadow")
+          .attr("transform", (d) => `translate(${d.x}, ${d.y})`);
+
+        tileGroups.append("rect")
+          .attr("class", "tile-frame")
+          .attr("width", (d) => d.w)
+          .attr("height", (d) => d.h);
+
+        tileGroups.append("image")
+          .attr("width", (d) => d.w)
+          .attr("height", (d) => d.h)
+          .attr("href", (d) => d.image)
+          .attr("preserveAspectRatio", "xMidYMid slice");
+
+        tileGroups.append("text")
+          .attr("class", "tile-title")
+          .attr("x", 10)
+          .attr("y", (d) => d.h - 10)
+          .text((d) => d.title);
+
+        tileGroups.append("title")
+          .text((d) => d.title);
+
+        if (!tiles.length) {
+          rootG.append("text")
+            .attr("class", "note")
+            .attr("x", 40)
+            .attr("y", 60)
+            .text("画像がありません。items.csvとimages/originalを確認してください。");
+        }
+
+        applyInitialZoom();
+      }
+
+      function handleCsvFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const text = reader.result;
+          const rows = d3.csvParse(text);
+          render(rows);
+        };
+        reader.readAsText(file);
+      }
+
+      loadCsvButton.addEventListener("click", () => csvFileInput.click());
+      csvFileInput.addEventListener("change", (event) => {
+        handleCsvFile(event.target.files[0]);
+      });
+
+      d3.csv("items.csv").then((rows) => {
+        return render(rows);
+      }).catch((err) => {
+        console.error("Failed to load items.csv", err);
+        controls.style.opacity = "1";
+      });
+
+      window.addEventListener("resize", () => {
+        applyInitialZoom();
+      });
+    </script>
+  </body>
+</html>
