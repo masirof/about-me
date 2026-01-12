@@ -74,4 +74,5 @@
 - d3-playgroud8.htmlを編集してほしい pureref方式で画像を表示して　カテゴリで分けて　日本語でok
 
 - 表示解像度は変えずに、画像の大きさを変えてほしい　弱めの正規化(拡大は最大1.5倍、縮小は0.7倍)　をして画像の大きさを変えて
-- d3-playgroud8.html にd3-camera1.htmlの#rigをいい感じに入れてほしい
+
+- d3-playgroud8.html にd3-camera1.htmlの#rigを.categoryとtile-group tile-shadowを作って、.canvasにいい感じに入れてほしい　stat-wrap cl2も表示してほしい　画像を512pxぐらいで表示できる大きさにしてほしい　.rigと.unitを横並びにしてほしい　スクロールバーいらない　
