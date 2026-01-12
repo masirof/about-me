@@ -131,6 +131,9 @@
       .tile-group:hover .tile-frame {
         stroke: rgba(255, 255, 255, 0.4);
       }
+      .tile-group.is-link {
+        cursor: pointer;
+      }
       .note {
         font-size: 30px;
         fill: rgba(255, 255, 255, 0.4);
@@ -754,7 +757,8 @@
                   w: item.w,
                   h: item.h,
                   title: normalizeText(item.title) || normalizeText(item.image),
-                  image: item.imagePath
+                  image: item.imagePath,
+                  url: normalizeText(item.url)
                 });
                 rowX += item.w + ui.tileGap;
               });
@@ -767,7 +771,7 @@
           .data(tiles, (d) => d.id)
           .enter()
           .append("g")
-          .attr("class", "tile-group tile-shadow")
+          .attr("class", (d) => `tile-group tile-shadow${d.url ? " is-link" : ""}`)
           .attr("transform", (d) => `translate(${d.x}, ${d.y})`);
 
         tileGroups.append("rect")
@@ -779,7 +783,12 @@
           .attr("width", (d) => d.w)
           .attr("height", (d) => d.h)
           .attr("href", (d) => d.image)
-          .attr("preserveAspectRatio", "xMidYMid slice");
+          .attr("preserveAspectRatio", "xMidYMid slice")
+          .on("click", (event, d) => {
+            if (!d.url) return;
+            event.stopPropagation();
+            window.open(d.url, "_blank", "noopener,noreferrer");
+          });
 
         tileGroups.append("text")
           .attr("class", "tile-title")
