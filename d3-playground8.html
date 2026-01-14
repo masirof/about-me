@@ -34,26 +34,6 @@
         color: var(--ink);
         overflow: hidden;
       }
-      header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 14px 18px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        background: var(--panel);
-      }
-      h1 {
-        font-size: 16px;
-        letter-spacing: 0.18em;
-        margin: 0 0 6px;
-        text-transform: uppercase;
-      }
-      p {
-        margin: 0;
-        font-size: 15px;
-        color: var(--muted);
-      }
       .controls {
         display: flex;
         align-items: center;
@@ -78,7 +58,20 @@
         display: none;
       }
       .canvas {
-        height: calc(100vh - 72px);
+        height: 100vh;
+        position: relative;
+      }
+      .hint {
+        position: absolute;
+        left: 16px;
+        bottom: 16px;
+        font-size: 14px;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+        background: rgba(10, 12, 18, 0.6);
+        padding: 6px 10px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(4px);
       }
       svg {
         width: 100%;
@@ -243,37 +236,24 @@
           inset 0 0 8px rgba(255, 255, 255, 0.1);
       }
       @media (max-width: 900px) {
-        header {
-          flex-direction: column;
-          align-items: flex-start;
-        }
-        .canvas {
-          height: calc(100vh - 96px);
+        .hint {
+          font-size: 12px;
+          letter-spacing: 0.08em;
         }
       }
     </style>
   </head>
   <body>
-    <header>
-      <div>
-        <h1>PureRef風イメージボード</h1>
-        <p>ホイール: ズーム / ドラッグ: パン</p>
-      </div>
-      <div class="controls" id="controls">
-        <span>CSVが読めない場合は手動読み込み</span>
-        <button id="loadCsv">CSVを読み込む</button>
-        <input id="csvFile" type="file" accept=".csv" />
-      </div>
-    </header>
     <div class="canvas">
       <svg></svg>
+      <div class="hint">ホイール: ズーム / ドラッグ: パン</div>
     </div>
     <script>
       const ui = {
-        tileGap: 16,
-        subPadding: 18,
-        subTitleHeight: 30,
-        subGap: 36,
+        tileGap: 8,
+        subPadding: 10,
+        subTitleHeight: 24,
+        subGap: 28,
         catPadding: 28,
         catHeader: 50,
         catGap: 90,
@@ -291,22 +271,6 @@
         "#ffd7ff",
         "#b9ff9e"
       ];
-
-      const labelMap = new Map([
-        ["music", "音楽"],
-        ["design", "デザイン"],
-        ["avatar", "アバター"],
-        ["avator", "アバター"],
-        ["manga", "漫画"],
-        ["make", "制作"],
-        ["made", "制作"],
-        ["photo", "写真"],
-        ["shot", "写真"],
-        ["anime", "アニメ"],
-        ["illustration", "イラスト"],
-        ["book", "本"],
-        ["good", "好き"]
-      ]);
 
       const svg = d3.select("svg");
       const zoomG = svg.append("g");
@@ -342,8 +306,7 @@
       }
 
       function categoryLabel(value) {
-        const key = normalizeText(value).toLowerCase();
-        return labelMap.get(key) || normalizeText(value) || "未分類";
+        return normalizeText(value) || "未分類";
       }
 
       function imageKey(name) {
@@ -385,7 +348,6 @@
         const height = rows * (unitOuter + rigUnitExtra) + rigUnitGap * (rows - 1) + rigWrapPad * 2;
         return { width, height, cols, rows };
       }
-
 
       function clamp(value, min, max) {
         return Math.max(min, Math.min(max, value));
@@ -858,17 +820,21 @@
         reader.readAsText(file);
       }
 
-      loadCsvButton.addEventListener("click", () => csvFileInput.click());
-      csvFileInput.addEventListener("change", (event) => {
-        handleCsvFile(event.target.files[0]);
-      });
+      if (loadCsvButton && csvFileInput) {
+        loadCsvButton.addEventListener("click", () => csvFileInput.click());
+        csvFileInput.addEventListener("change", (event) => {
+          handleCsvFile(event.target.files[0]);
+        });
+      }
 
       d3.csv("items.csv").then((rows) => {
         itemsRows = rows;
         return render(rows);
       }).catch((err) => {
         console.error("Failed to load items.csv", err);
-        controls.style.opacity = "1";
+        if (controls) {
+          controls.style.opacity = "1";
+        }
       });
 
       d3.csv("camera_ui.csv").then((rows) => {
