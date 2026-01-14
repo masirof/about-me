@@ -277,7 +277,7 @@
         catPadding: 28,
         catHeader: 50,
         catGap: 90,
-        maxSubRowWidth: 1200,
+        maxSubRowWidth: 4000,
         fallbackSize: 240
       };
 
@@ -430,31 +430,45 @@
       }
 
       function applyInitialZoom() {
-        const transform = d3.zoomIdentity.translate(initialPadding, initialPadding).scale(initialScale);
+        const bounds = rootG.node().getBBox();
+        const viewBox = svg.node().viewBox && svg.node().viewBox.baseVal ? svg.node().viewBox.baseVal : null;
+        const viewWidth = viewBox && viewBox.width ? viewBox.width : bounds.width;
+        const viewHeight = viewBox && viewBox.height ? viewBox.height : bounds.height;
+        const scale = initialScale;
+        const tx = (viewWidth - bounds.width * scale) / 2 - bounds.x * scale;
+        const ty = (viewHeight - bounds.height * scale) / 2 - bounds.y * scale;
+        const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
         svg.call(zoom.transform, transform);
       }
 
       function buildSubLayout(sub) {
-        const count = sub.items.length || 1;
-        const targetRows = Math.max(1, Math.ceil(Math.sqrt(count)));
-        const rows = Array.from({ length: targetRows }, () => ({
-          items: [],
-          width: 0,
-          height: 0
-        }));
-        sub.items.forEach((item, index) => {
-          const row = rows[index % targetRows];
-          row.items.push(item);
-          row.width += (row.items.length > 1 ? ui.tileGap : 0) + item.w;
-          row.height = Math.max(row.height, item.h);
+        const rows = [];
+        let currentRow = { items: [], width: 0, height: 0 };
+        sub.items.forEach((item) => {
+          const nextWidth = currentRow.items.length
+            ? currentRow.width + ui.tileGap + item.w
+            : item.w;
+          if (currentRow.items.length && nextWidth > ui.maxSubRowWidth) {
+            rows.push(currentRow);
+            currentRow = { items: [], width: 0, height: 0 };
+          }
+          currentRow.items.push(item);
+          currentRow.width = currentRow.items.length
+            ? currentRow.width + (currentRow.items.length > 1 ? ui.tileGap : 0) + item.w
+            : item.w;
+          currentRow.height = Math.max(currentRow.height, item.h);
         });
-        const activeRows = rows.filter((row) => row.items.length);
-        const finalRows = activeRows.length ? activeRows : [{ items: [], width: ui.fallbackSize, height: ui.fallbackSize }];
-        const maxRowWidth = finalRows.reduce((max, row) => Math.max(max, row.width), 0);
-        const contentHeight = finalRows.reduce((sum, row) => sum + row.height, 0) + ui.tileGap * (finalRows.length - 1);
+        if (currentRow.items.length) {
+          rows.push(currentRow);
+        }
+        if (!rows.length) {
+          rows.push({ items: [], width: ui.fallbackSize, height: ui.fallbackSize });
+        }
+        const maxRowWidth = rows.reduce((max, row) => Math.max(max, row.width), 0);
+        const contentHeight = rows.reduce((sum, row) => sum + row.height, 0) + ui.tileGap * (rows.length - 1);
         const width = ui.subPadding * 2 + maxRowWidth;
         const height = ui.subPadding * 2 + ui.subTitleHeight + contentHeight;
-        return { rows: finalRows, width, height };
+        return { rows, width, height };
       }
 
       function layoutCategory(category) {
@@ -475,79 +489,102 @@
           ...sub,
           layout: buildSubLayout(sub)
         }));
-        const count = Math.max(1, subLayouts.length);
-        const cols = Math.ceil(Math.sqrt(count));
-        const rows = Math.ceil(count / cols);
-        const colWidths = Array(cols).fill(0);
-        const rowHeights = Array(rows).fill(0);
-        subLayouts.forEach((sub, index) => {
-          const col = index % cols;
-          const row = Math.floor(index / cols);
-          colWidths[col] = Math.max(colWidths[col], sub.layout.width);
-          rowHeights[row] = Math.max(rowHeights[row], sub.layout.height);
+        const sorted = [...subLayouts].sort((a, b) => {
+          const areaA = a.layout.width * a.layout.height;
+          const areaB = b.layout.width * b.layout.height;
+          return areaB - areaA;
         });
-        const colOffsets = [];
-        const rowOffsets = [];
-        colWidths.reduce((acc, w, i) => {
-          colOffsets[i] = acc;
-          return acc + w + ui.subGap;
-        }, 0);
-        rowHeights.reduce((acc, h, i) => {
-          rowOffsets[i] = acc;
-          return acc + h + ui.subGap;
-        }, 0);
-        const contentWidth = Math.max(
-          360,
-          colWidths.reduce((sum, w) => sum + w, 0) + ui.subGap * (cols - 1)
-        );
-        const contentHeight = rowHeights.reduce((sum, h) => sum + h, 0) + ui.subGap * (rows - 1);
+        const totalArea = subLayouts.reduce((sum, sub) => sum + sub.layout.width * sub.layout.height, 0);
+        const targetWidth = Math.max(360, Math.min(ui.maxSubRowWidth, Math.sqrt(totalArea) * 1.1));
+        let x = 0;
+        let y = 0;
+        let rowHeight = 0;
+        let maxRowWidth = 0;
+        sorted.forEach((sub) => {
+          const nextWidth = x + sub.layout.width;
+          if (x > 0 && nextWidth > targetWidth) {
+            maxRowWidth = Math.max(maxRowWidth, x - ui.subGap);
+            x = 0;
+            y += rowHeight + ui.subGap;
+            rowHeight = 0;
+          }
+          sub.x = x;
+          sub.y = y;
+          x += sub.layout.width + ui.subGap;
+          rowHeight = Math.max(rowHeight, sub.layout.height);
+        });
+        maxRowWidth = Math.max(maxRowWidth, x - ui.subGap);
+        const contentWidth = Math.max(360, maxRowWidth);
+        const contentHeight = y + rowHeight;
         const width = contentWidth + ui.catPadding * 2;
         const height = contentHeight + ui.catPadding * 2 + ui.catHeader;
         return {
           ...category,
           width,
           height,
-          subcategories: subLayouts.map((sub, index) => {
-            const col = index % cols;
-            const row = Math.floor(index / cols);
-            return {
-              ...sub,
-              x: colOffsets[col] + ui.catPadding,
-              y: rowOffsets[row] + ui.catHeader + ui.catPadding
-            };
-          })
+          subcategories: subLayouts.map((sub) => ({
+            ...sub,
+            x: sub.x + ui.catPadding,
+            y: sub.y + ui.catHeader + ui.catPadding
+          }))
         };
       }
 
       function layoutBoard(categories) {
-        const columnCount = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(categories.length))));
-        const columns = Array.from({ length: columnCount }, () => ({
-          height: 0,
-          width: 0,
-          items: []
-        }));
-        categories.forEach((cat) => {
-          let target = columns[0];
-          let targetIndex = 0;
-          columns.forEach((col, index) => {
-            if (col.height < target.height) {
-              target = col;
-              targetIndex = index;
+        const sorted = [...categories].sort((a, b) => b.height - a.height);
+        const totalArea = categories.reduce((sum, cat) => sum + cat.width * cat.height, 0);
+        const minWidth = Math.max(
+          1200,
+          sorted.reduce((max, cat) => Math.max(max, cat.width), 0)
+        );
+        const maxWidth = sorted.reduce((sum, cat) => sum + cat.width, 0) + ui.catGap * (sorted.length - 1);
+        const preferredWidth = Math.min(maxWidth, Math.max(minWidth, Math.sqrt(totalArea) * 1.35));
+
+        function packWithWidth(targetWidth) {
+          let x = 0;
+          let y = 0;
+          let rowHeight = 0;
+          let maxRowWidth = 0;
+          sorted.forEach((cat) => {
+            if (x > 0 && x + cat.width > targetWidth) {
+              maxRowWidth = Math.max(maxRowWidth, x - ui.catGap);
+              x = 0;
+              y += rowHeight + ui.catGap;
+              rowHeight = 0;
             }
+            cat.x = x;
+            cat.y = y;
+            x += cat.width + ui.catGap;
+            rowHeight = Math.max(rowHeight, cat.height);
           });
-          cat.column = targetIndex;
-          cat.y = target.height;
-          target.height += cat.height + ui.catGap;
-          target.width = Math.max(target.width, cat.width);
-        });
-        const xOffsets = [];
-        columns.reduce((acc, col, index) => {
-          xOffsets[index] = acc;
-          return acc + col.width + ui.catGap;
-        }, 0);
-        const width = columns.reduce((sum, col) => sum + col.width, 0) + ui.catGap * (columns.length - 1);
-        const height = Math.max(...columns.map((col) => col.height)) - ui.catGap;
-        return { xOffsets, width, height };
+          maxRowWidth = Math.max(maxRowWidth, x - ui.catGap);
+          return {
+            width: maxRowWidth,
+            height: y + rowHeight
+          };
+        }
+
+        let best = null;
+        const steps = 18;
+        for (let i = 0; i <= steps; i += 1) {
+          const width = minWidth + ((maxWidth - minWidth) * i) / steps;
+          const result = packWithWidth(width);
+          const area = result.width * result.height;
+          if (!best || area < best.area) {
+            best = { area, width, ...result };
+          }
+        }
+
+        const fallback = packWithWidth(preferredWidth);
+        let finalResult = best || { area: fallback.width * fallback.height, width: preferredWidth, ...fallback };
+        if (best) {
+          const bestAspect = best.width / Math.max(1, best.height);
+          const prefAspect = preferredWidth / Math.max(1, fallback.height);
+          if (bestAspect < 1 && prefAspect > bestAspect * 1.1) {
+            finalResult = { area: fallback.width * fallback.height, width: preferredWidth, ...fallback };
+          }
+        }
+        return { width: finalResult.width, height: finalResult.height };
       }
 
       function loadImageMeta(paths) {
@@ -655,7 +692,7 @@
           .enter()
           .append("g")
           .attr("class", "category")
-          .attr("transform", (d) => `translate(${board.xOffsets[d.column]}, ${d.y})`);
+          .attr("transform", (d) => `translate(${d.x}, ${d.y})`);
 
         categoryGroups.append("rect")
           .attr("class", "category-box")
@@ -748,7 +785,7 @@
             sub.layout.rows.forEach((row) => {
               let rowX = 0;
               row.items.forEach((item, idx) => {
-                const x = board.xOffsets[category.column] + sub.x + ui.subPadding + rowX;
+                const x = category.x + sub.x + ui.subPadding + rowX;
                 const y = category.y + sub.y + ui.subPadding + ui.subTitleHeight + rowY;
                 tiles.push({
                   id: `${category.id}-${sub.id}-${idx}`,
