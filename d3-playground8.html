@@ -92,7 +92,7 @@
         ry: 18;
       }
       .category-title {
-        font-size: 80px;
+        font-size: 160px;
         letter-spacing: 0.22em;
         fill: var(--ink);
       }
@@ -104,7 +104,7 @@
         ry: 14;
       }
       .sub-title {
-        font-size: 80px;
+        font-size: 160px;
         letter-spacing: 0.12em;
         fill: var(--muted);
       }
@@ -252,10 +252,10 @@
       const ui = {
         tileGap: 8,
         subPadding: 10,
-        subTitleHeight: 24,
+        subTitleHeight: 180,
         subGap: 28,
         catPadding: 28,
-        catHeader: 50,
+        catHeader: 220,
         catGap: 90,
         maxSubRowWidth: 4000,
         fallbackSize: 240
@@ -280,7 +280,7 @@
       const csvFileInput = document.getElementById("csvFile");
       const imageMeta = new Map();
       // const scaleClamp = { min: 1, max: 1 };
-      const scaleClamp = { min: 0.7, max: 1.5 };
+      const scaleClamp = { min: 0.2, max: 20 };
       const initialScale = 0.9;
       const initialPadding = 40;
       const rigOrder = ["cb1", "cl1", "cl2", "cl3", "cl4"];
@@ -385,10 +385,12 @@
           .style("width", (d) => `${percentFn(valueFn(d))}%`);
       }
 
-      function computeScale(w, h, target) {
-        const longEdge = Math.max(w, h);
-        if (!longEdge) return 1;
-        return clamp(target / longEdge, scaleClamp.min, scaleClamp.max);
+      const targetShortEdge = 700;
+
+      function computeScale(w, h) {
+        const shortEdge = Math.min(w, h);
+        if (!shortEdge) return 1;
+        return clamp(targetShortEdge / shortEdge, scaleClamp.min, scaleClamp.max);
       }
 
       function applyInitialZoom() {
@@ -578,14 +580,6 @@
         const validRows = cleanedRows.filter((row) => normalizeText(row.image));
         const imagePaths = validRows.map((row) => toImagePath(row.image));
         await loadImageMeta(imagePaths);
-        const longEdges = imagePaths
-          .map((path) => imageMeta.get(path))
-          .filter(Boolean)
-          .map((meta) => Math.max(meta.w, meta.h))
-          .sort((a, b) => a - b);
-        const targetEdge = longEdges.length
-          ? longEdges[Math.floor(longEdges.length / 2)]
-          : ui.fallbackSize;
 
         const categoryMap = new Map();
         validRows.forEach((row) => {
@@ -610,7 +604,7 @@
             const items = subItems.map((item) => {
               const imagePath = toImagePath(item.image);
               const meta = imageMeta.get(imagePath) || { w: ui.fallbackSize, h: ui.fallbackSize };
-              const scale = computeScale(meta.w, meta.h, targetEdge);
+              const scale = computeScale(meta.w, meta.h);
               return {
                 ...item,
                 imagePath,
@@ -664,7 +658,7 @@
         categoryGroups.append("text")
           .attr("class", "category-title")
           .attr("x", ui.catPadding)
-          .attr("y", 34)
+          .attr("y", 120)
           .text((d) => d.name);
 
         const rigGroups = categoryGroups.filter((d) => d.isRig);
@@ -737,7 +731,7 @@
         subGroups.append("text")
           .attr("class", "sub-title")
           .attr("x", ui.subPadding)
-          .attr("y", ui.subPadding + 16)
+          .attr("y", ui.subPadding + 120)
           .text((d) => d.name);
 
         const tiles = [];
