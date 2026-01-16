@@ -641,7 +641,7 @@
           const subcategories = Array.from(subMap.entries()).map(([subName, subItems]) => {
             const items = subItems.map((item) => {
               const fileName = normalizeText(item.image);
-              const imagePath = resolvedImages.get(fileName) || buildImagePaths(fileName).fallback;
+              const imagePath = resolvedImages.get(fileName) || buildImagePaths(fileName).avif;
               const meta = imageMeta.get(imagePath) || { w: ui.fallbackSize, h: ui.fallbackSize };
               const scale = computeScale(meta.w, meta.h);
               return {
@@ -734,7 +734,7 @@
               .attr("alt", (item) => item.name || "")
               .attr("src", (item) => {
                 const fileName = normalizeText(item.image);
-                return resolvedImages.get(fileName) || buildImagePaths(fileName).fallback;
+                return resolvedImages.get(fileName) || buildImagePaths(fileName).avif;
               })
               .on("load", () => {})
               .on("error", () => {});
