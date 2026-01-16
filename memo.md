@@ -43,8 +43,11 @@
 # items.csv AI用
 - uv環境ある　/scripts/fetch_soundcloud.py を作成してほしい items.csvを読み取って、idカラムに入っているsoundcloud.comがついているurlをhttps://soundcloud.com/oembed?format=json&url={ここにurl}にしてoembed取得して、タイトルと画像を取得して、items.csvに書き込んでほしい　画像は/images/original/　idカラムは最大値+1したものを入れて　titleカラムはタイトルを入れて　imageカラムに画像を入れてほしい genre1にはmusicを入れて commentカラムに値があったら、そのままcommentカラムに値を入れて
 
-# ゲームっぽいカメラとレンズ一覧
+
+# cloudflare pages
+- mainで作業しまくって、prodブランチに送る
 - 
+
 # AI用
 - d3-playground2.html にズームイン、ズームアウト、ドラッグ、d3-forceいらない、円ごとにカテゴリ分け、カテゴリ円の中に画像のモックを入れて、カテゴリ5つ、各画像モック20個 画像もっとズームインできるようにして　画像モックの大きさ512px*512px 画像モック同士の隙間を空けて、きれいに整列　画像モックを全部表示できる円カテゴリサイズにして　
 - d3-playground2.html　Disjoint force-directed graphにして、画像モックを点ノードにしてみて画像モックの大きさ512px*512px　線は1つ　もうちょい線を太くして　もうちょいカテゴリごとにバラして
