@@ -79,3 +79,15 @@
 - 表示解像度は変えずに、画像の大きさを変えてほしい　弱めの正規化(拡大は最大1.5倍、縮小は0.7倍)　をして画像の大きさを変えて
 
 - d3-playgroud8.html にd3-camera1.htmlの#rigを.categoryとtile-group tile-shadowを作って、.canvasにいい感じに入れてほしい　stat-wrap cl2も表示してほしい　画像を512pxぐらいで表示できる大きさにしてほしい　.rigと.unitを横並びにしてほしい　スクロールバーいらない　
+
+- Node.js+sharp で、images/original の jpg/jpeg/png/webp をimages/avif に AVIF 変換するコードをimages-to-avif.tsに書いて。
+- 設定:
+  - quality: 30
+  - effort: 4
+  - chromaSubsampling: 4:2:0
+条件:
+- 既存ファイルはスキップ
+- エラーで止まらない
+- 外部CLIなし
+出力はコード全文のみ。
+
