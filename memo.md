@@ -46,7 +46,8 @@
 
 # cloudflare pages
 - mainで作業しまくって、prodブランチに送る
-- 
+- index.htmlのcloudflare pages上のルーティングは_redirectsを使えばできる
+- https://your-site.pages.dev/images/avif/0001.avif　みたいな感じで画像urlを埋め込む
 
 # AI用
 - d3-playground2.html にズームイン、ズームアウト、ドラッグ、d3-forceいらない、円ごとにカテゴリ分け、カテゴリ円の中に画像のモックを入れて、カテゴリ5つ、各画像モック20個 画像もっとズームインできるようにして　画像モックの大きさ512px*512px 画像モック同士の隙間を空けて、きれいに整列　画像モックを全部表示できる円カテゴリサイズにして　
@@ -94,3 +95,4 @@
 - 外部CLIなし
 出力はコード全文のみ。
 
+- d3-playgroud9.htmlを編集して　cloudflare pagesにデプロイしてる　画像はimgboxx.pages.dev/images/avif/1.avifで取得できるので、/images/avif/1.avif とかで取得したい　items.csv, camera_ui.csvの読み込み→画像ファイル名読み込み(拡張子は絶対.avif) avifが取得できなかったらitems.csv, camera_ui.csvの拡張子を含んだ画像ファイルを読み込む→表示

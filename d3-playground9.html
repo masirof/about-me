@@ -1,0 +1,887 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>D3 Playground 8 - PureRef Board</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      :root {
+        --bg: #0b0c10;
+        --panel: rgba(14, 16, 24, 0.9);
+        --ink: #eef1f7;
+        --muted: #8a90a3;
+        --line: rgba(255, 255, 255, 0.14);
+        --accent: #9bd4ff;
+        --shadow: rgba(0, 0, 0, 0.4);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: "Zen Kaku Gothic New", "Yu Gothic", "Meiryo", sans-serif;
+        background: radial-gradient(circle at 20% 10%, rgba(90, 130, 255, 0.12), transparent 55%),
+          radial-gradient(circle at 80% 80%, rgba(255, 160, 90, 0.1), transparent 60%),
+          var(--bg);
+        color: var(--ink);
+        overflow: hidden;
+      }
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 15px;
+        color: var(--muted);
+      }
+      .controls button {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        color: var(--ink);
+        padding: 6px 12px;
+        font-size: 15px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .controls button:hover {
+        border-color: rgba(255, 255, 255, 0.6);
+      }
+      .controls input {
+        display: none;
+      }
+      .canvas {
+        height: 100vh;
+        position: relative;
+      }
+      .hint {
+        position: absolute;
+        left: 16px;
+        bottom: 16px;
+        font-size: 14px;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+        background: rgba(10, 12, 18, 0.6);
+        padding: 6px 10px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(4px);
+      }
+      svg {
+        width: 100%;
+        height: 100%;
+        cursor: grab;
+        background: radial-gradient(circle at 10% 10%, rgba(255, 255, 255, 0.04), transparent 40%),
+          radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.05), transparent 45%),
+          rgba(8, 10, 16, 0.95);
+      }
+      svg:active {
+        cursor: grabbing;
+      }
+      .category-box {
+        fill: rgba(24, 28, 38, 0.55);
+        stroke: rgba(140, 180, 255, 0.45);
+        stroke-width: 5;
+        rx: 18;
+        ry: 18;
+      }
+      .category-title {
+        font-size: 160px;
+        letter-spacing: 0.22em;
+        fill: var(--ink);
+      }
+      .sub-box {
+        fill: rgba(60, 70, 90, 0.45);
+        stroke: rgba(255, 255, 255, 0.12);
+        stroke-width: 1;
+        rx: 14;
+        ry: 14;
+      }
+      .sub-title {
+        font-size: 160px;
+        letter-spacing: 0.12em;
+        fill: var(--muted);
+      }
+      .tile-frame {
+        fill: rgba(10, 12, 18, 0.9);
+        stroke: rgba(255, 255, 255, 0.12);
+        stroke-width: 1;
+      }
+      .tile-title {
+        font-size: 25px;
+        fill: rgba(255, 255, 255, 0.7);
+        pointer-events: none;
+      }
+      .tile-shadow {
+        filter: drop-shadow(0 10px 18px var(--shadow));
+      }
+      .tile-group:hover .tile-frame {
+        stroke: rgba(255, 255, 255, 0.4);
+      }
+      .tile-group.is-link {
+        cursor: pointer;
+      }
+      .note {
+        font-size: 30px;
+        fill: rgba(255, 255, 255, 0.4);
+      }
+      .rig-wrap {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        padding: 20px;
+      }
+      .rig {
+        --unit: 768px;
+        --unit-pad: 16px;
+        --unit-gap: 24px;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        gap: var(--unit-gap);
+        align-items: flex-start;
+        align-content: flex-start;
+      }
+      .rig .unit {
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        padding: var(--unit-pad);
+        background: linear-gradient(180deg, rgba(28, 28, 28, 0.95), rgba(18, 18, 18, 0.95));
+        box-shadow:
+          inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+          0 0 16px rgba(0, 0, 0, 0.35);
+      }
+      .rig .unit.cb1 {
+        height: 1015px !important;
+      }
+      .stat-wrap.cb1{
+        margin-top: 60px !important;
+      }
+      .rig .unit-header {
+        font-size: 26px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.85);
+        margin-bottom: 14px;
+      }
+      .rig .image-box {
+        width: var(--unit);
+        height: var(--unit);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: linear-gradient(135deg, rgba(20, 20, 20, 0.95), rgba(12, 12, 12, 0.95));
+        display: grid;
+        place-items: center;
+        margin-bottom: 14px;
+        overflow: hidden;
+      }
+      .rig .image-box img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+      .rig .unit-title {
+        font-size: 22px;
+        letter-spacing: 0.08em;
+        line-height: 1.2;
+        margin-bottom: 8px;
+      }
+      .rig .specs {
+        font-size: 16px;
+        color: var(--muted);
+        letter-spacing: 0.12em;
+      }
+      .rig .stat-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 14px;
+      }
+      .rig .stat-row {
+        display: grid;
+        grid-template-columns: 140px 120px 1fr;
+        align-items: center;
+        gap: 12px;
+      }
+      .rig .stat-label {
+        font-size: 16px;
+        letter-spacing: 0.22em;
+        color: rgba(255, 255, 255, 0.8);
+        text-transform: uppercase;
+      }
+      .rig .stat-inline {
+        font-size: 20px;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .rig .stat-bar {
+        position: relative;
+        height: 14px;
+        background: #4a4a4a;
+        overflow: hidden;
+        box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+      }
+      .rig .stat-fill {
+        height: 100%;
+        width: 40%;
+        background: #8f8f8f;
+        box-shadow:
+          0 0 10px rgba(0, 0, 0, 0.4),
+          inset 0 0 8px rgba(255, 255, 255, 0.1);
+      }
+      @media (max-width: 900px) {
+        .hint {
+          font-size: 12px;
+          letter-spacing: 0.08em;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="canvas">
+      <svg></svg>
+      <div class="hint">ホイール: ズーム / ドラッグ: パン</div>
+    </div>
+    <script>
+      const ui = {
+        tileGap: 8,
+        subPadding: 10,
+        subTitleHeight: 180,
+        subGap: 28,
+        catPadding: 28,
+        catHeader: 220,
+        catGap: 90,
+        maxSubRowWidth: 4000,
+        fallbackSize: 240
+      };
+
+      const palette = [
+        "#8fd0ff",
+        "#ffd28a",
+        "#d6a6ff",
+        "#ff9ea8",
+        "#9ef0c4",
+        "#8ff3ff",
+        "#ffd7ff",
+        "#b9ff9e"
+      ];
+
+      const svg = d3.select("svg");
+      const zoomG = svg.append("g");
+      const rootG = zoomG.append("g");
+      const controls = document.getElementById("controls");
+      const loadCsvButton = document.getElementById("loadCsv");
+      const csvFileInput = document.getElementById("csvFile");
+      const imageMeta = new Map();
+      const resolvedImages = new Map();
+      // const scaleClamp = { min: 1, max: 1 };
+      const scaleClamp = { min: 0.2, max: 20 };
+      const initialScale = 0.9;
+      const initialPadding = 40;
+      const rigOrder = ["cb1", "cl1", "cl2", "cl3", "cl4"];
+      const rigUnitSize = 768;
+      const rigUnitPad = 16;
+      const rigUnitGap = 24;
+      const rigWrapPad = 20;
+      const rigUnitExtra = 220;
+      const rigMaxCols = 5;
+      let itemsRows = null;
+      let rigRows = null;
+
+      const zoom = d3.zoom()
+        .scaleExtent([0.8, 10])
+        .on("zoom", (event) => {
+          zoomG.attr("transform", event.transform);
+        });
+
+      svg.call(zoom).on("dblclick.zoom", null);
+
+      function normalizeText(value) {
+        return (value || "").toString().trim();
+      }
+
+      function categoryLabel(value) {
+        return normalizeText(value) || "未分類";
+      }
+
+      function imageKey(name) {
+        const match = (name || "").toLowerCase().match(/^(cb\d+|cl\d+)\./);
+        return match ? match[1] : "";
+      }
+
+      function stripExtension(name) {
+        return name.replace(/\.[^/.]+$/, "");
+      }
+
+      function buildImagePaths(file) {
+        const name = normalizeText(file);
+        if (!name) return { avif: "", fallback: "" };
+        const baseName = name.split(/[\\/]/).pop();
+        const baseNoExt = stripExtension(baseName);
+        return {
+          avif: `/images/avif/${encodeURIComponent(baseNoExt)}.avif`,
+          fallback: `images/original/${encodeURIComponent(baseName)}`
+        };
+      }
+
+      function normalizeRows(rows) {
+        return rows.map((row) => {
+          const cleaned = {};
+          Object.keys(row).forEach((key) => {
+            const trimmedKey = key.trim();
+            const value = typeof row[key] === "string" ? row[key].trim() : row[key];
+            cleaned[trimmedKey] = value;
+          });
+          return cleaned;
+        });
+      }
+
+      function buildRigItems(rows) {
+        const cleaned = normalizeRows(rows || []);
+        return rigOrder
+          .map((key) => cleaned.find((row) => imageKey(row.image) === key))
+          .filter(Boolean);
+      }
+
+      function loadImage(url) {
+        return new Promise((resolve, reject) => {
+          if (!url) {
+            reject(new Error("missing url"));
+            return;
+          }
+          const img = new Image();
+          img.onload = () => {
+            resolve({ w: img.naturalWidth, h: img.naturalHeight });
+          };
+          img.onerror = () => reject(new Error("image load failed"));
+          img.src = url;
+        });
+      }
+
+      async function resolveImageSource(file) {
+        const name = normalizeText(file);
+        if (!name) return "";
+        if (resolvedImages.has(name)) {
+          return resolvedImages.get(name);
+        }
+        const paths = buildImagePaths(name);
+        try {
+          const meta = await loadImage(paths.avif);
+          imageMeta.set(paths.avif, { w: meta.w, h: meta.h });
+          resolvedImages.set(name, paths.avif);
+          return paths.avif;
+        } catch (err) {
+          if (!paths.fallback) {
+            resolvedImages.set(name, "");
+            return "";
+          }
+          try {
+            const meta = await loadImage(paths.fallback);
+            imageMeta.set(paths.fallback, { w: meta.w, h: meta.h });
+            resolvedImages.set(name, paths.fallback);
+            return paths.fallback;
+          } catch (fallbackErr) {
+            imageMeta.set(paths.fallback, { w: 0, h: 0 });
+            resolvedImages.set(name, paths.fallback);
+            return paths.fallback;
+          }
+        }
+      }
+
+      function computeRigBox(items) {
+        const count = Math.max(1, items.length);
+        const cols = Math.min(count, rigMaxCols);
+        const rows = Math.ceil(count / cols);
+        const unitOuter = rigUnitSize + rigUnitPad * 2;
+        const width = cols * unitOuter + rigUnitGap * (cols - 1) + rigWrapPad * 2;
+        const height = rows * (unitOuter + rigUnitExtra) + rigUnitGap * (rows - 1) + rigWrapPad * 2;
+        return { width, height, cols, rows };
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function statValue(value, kind) {
+        if (!value) return 25;
+        const numbers = (value.match(/\d+\.?\d*/g) || []).map(Number);
+        if (!numbers.length) return 25;
+        const max = Math.max(...numbers);
+        if (kind === "focal") {
+          return Math.max(10, Math.min(100, (max / 200) * 100));
+        }
+        if (kind === "aperture") {
+          const inverted = 1 / Math.max(0.7, max);
+          return Math.max(10, Math.min(100, inverted * 120));
+        }
+        if (kind === "weight") {
+          return Math.max(10, Math.min(100, (max / 1000) * 100));
+        }
+        return 40;
+      }
+
+      function addStat(container, label, valueFn, percentFn, predicate) {
+        const block = container.append("xhtml:div").attr("class", "stat-block");
+        if (predicate) {
+          block.style("display", (d) => predicate(d) ? null : "none");
+        }
+        const row = block.append("xhtml:div").attr("class", "stat-row");
+        row.append("xhtml:div").attr("class", "stat-label").text(label);
+        row.append("xhtml:div").attr("class", "stat-inline").text((d) => valueFn(d) || "-");
+        const bar = row.append("xhtml:div").attr("class", "stat-bar");
+        bar.append("xhtml:div")
+          .attr("class", "stat-fill")
+          .style("width", (d) => `${percentFn(valueFn(d))}%`);
+      }
+
+      const targetShortEdge = 700;
+
+      function computeScale(w, h) {
+        const shortEdge = Math.min(w, h);
+        if (!shortEdge) return 1;
+        return clamp(targetShortEdge / shortEdge, scaleClamp.min, scaleClamp.max);
+      }
+
+      function applyInitialZoom() {
+        const bounds = rootG.node().getBBox();
+        const viewBox = svg.node().viewBox && svg.node().viewBox.baseVal ? svg.node().viewBox.baseVal : null;
+        const viewWidth = viewBox && viewBox.width ? viewBox.width : bounds.width;
+        const viewHeight = viewBox && viewBox.height ? viewBox.height : bounds.height;
+        const scale = initialScale;
+        const tx = (viewWidth - bounds.width * scale) / 2 - bounds.x * scale;
+        const ty = (viewHeight - bounds.height * scale) / 2 - bounds.y * scale;
+        const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+        svg.call(zoom.transform, transform);
+      }
+
+      function buildSubLayout(sub) {
+        const rows = [];
+        let currentRow = { items: [], width: 0, height: 0 };
+        sub.items.forEach((item) => {
+          const nextWidth = currentRow.items.length
+            ? currentRow.width + ui.tileGap + item.w
+            : item.w;
+          if (currentRow.items.length && nextWidth > ui.maxSubRowWidth) {
+            rows.push(currentRow);
+            currentRow = { items: [], width: 0, height: 0 };
+          }
+          currentRow.items.push(item);
+          currentRow.width = currentRow.items.length
+            ? currentRow.width + (currentRow.items.length > 1 ? ui.tileGap : 0) + item.w
+            : item.w;
+          currentRow.height = Math.max(currentRow.height, item.h);
+        });
+        if (currentRow.items.length) {
+          rows.push(currentRow);
+        }
+        if (!rows.length) {
+          rows.push({ items: [], width: ui.fallbackSize, height: ui.fallbackSize });
+        }
+        const maxRowWidth = rows.reduce((max, row) => Math.max(max, row.width), 0);
+        const contentHeight = rows.reduce((sum, row) => sum + row.height, 0) + ui.tileGap * (rows.length - 1);
+        const width = ui.subPadding * 2 + maxRowWidth;
+        const height = ui.subPadding * 2 + ui.subTitleHeight + contentHeight;
+        return { rows, width, height };
+      }
+
+      function layoutCategory(category) {
+        if (category.isRig) {
+          const rigBox = computeRigBox(category.rigItems || []);
+          const width = rigBox.width + ui.catPadding * 2;
+          const height = rigBox.height + ui.catPadding * 2 + ui.catHeader;
+          return {
+            ...category,
+            width,
+            height,
+            rigBoxWidth: rigBox.width,
+            rigBoxHeight: rigBox.height,
+            subcategories: []
+          };
+        }
+        const subLayouts = category.subcategories.map((sub) => ({
+          ...sub,
+          layout: buildSubLayout(sub)
+        }));
+        const sorted = [...subLayouts].sort((a, b) => {
+          const areaA = a.layout.width * a.layout.height;
+          const areaB = b.layout.width * b.layout.height;
+          return areaB - areaA;
+        });
+        const totalArea = subLayouts.reduce((sum, sub) => sum + sub.layout.width * sub.layout.height, 0);
+        const targetWidth = Math.max(360, Math.min(ui.maxSubRowWidth, Math.sqrt(totalArea) * 1.1));
+        let x = 0;
+        let y = 0;
+        let rowHeight = 0;
+        let maxRowWidth = 0;
+        sorted.forEach((sub) => {
+          const nextWidth = x + sub.layout.width;
+          if (x > 0 && nextWidth > targetWidth) {
+            maxRowWidth = Math.max(maxRowWidth, x - ui.subGap);
+            x = 0;
+            y += rowHeight + ui.subGap;
+            rowHeight = 0;
+          }
+          sub.x = x;
+          sub.y = y;
+          x += sub.layout.width + ui.subGap;
+          rowHeight = Math.max(rowHeight, sub.layout.height);
+        });
+        maxRowWidth = Math.max(maxRowWidth, x - ui.subGap);
+        const contentWidth = Math.max(360, maxRowWidth);
+        const contentHeight = y + rowHeight;
+        const width = contentWidth + ui.catPadding * 2;
+        const height = contentHeight + ui.catPadding * 2 + ui.catHeader;
+        return {
+          ...category,
+          width,
+          height,
+          subcategories: subLayouts.map((sub) => ({
+            ...sub,
+            x: sub.x + ui.catPadding,
+            y: sub.y + ui.catHeader + ui.catPadding
+          }))
+        };
+      }
+
+      function layoutBoard(categories) {
+        const sorted = [...categories].sort((a, b) => b.height - a.height);
+        const totalArea = categories.reduce((sum, cat) => sum + cat.width * cat.height, 0);
+        const minWidth = Math.max(
+          1200,
+          sorted.reduce((max, cat) => Math.max(max, cat.width), 0)
+        );
+        const maxWidth = sorted.reduce((sum, cat) => sum + cat.width, 0) + ui.catGap * (sorted.length - 1);
+        const preferredWidth = Math.min(maxWidth, Math.max(minWidth, Math.sqrt(totalArea) * 1.35));
+
+        function packWithWidth(targetWidth) {
+          let x = 0;
+          let y = 0;
+          let rowHeight = 0;
+          let maxRowWidth = 0;
+          sorted.forEach((cat) => {
+            if (x > 0 && x + cat.width > targetWidth) {
+              maxRowWidth = Math.max(maxRowWidth, x - ui.catGap);
+              x = 0;
+              y += rowHeight + ui.catGap;
+              rowHeight = 0;
+            }
+            cat.x = x;
+            cat.y = y;
+            x += cat.width + ui.catGap;
+            rowHeight = Math.max(rowHeight, cat.height);
+          });
+          maxRowWidth = Math.max(maxRowWidth, x - ui.catGap);
+          return {
+            width: maxRowWidth,
+            height: y + rowHeight
+          };
+        }
+
+        let best = null;
+        const steps = 18;
+        for (let i = 0; i <= steps; i += 1) {
+          const width = minWidth + ((maxWidth - minWidth) * i) / steps;
+          const result = packWithWidth(width);
+          const area = result.width * result.height;
+          if (!best || area < best.area) {
+            best = { area, width, ...result };
+          }
+        }
+
+        const fallback = packWithWidth(preferredWidth);
+        let finalResult = best || { area: fallback.width * fallback.height, width: preferredWidth, ...fallback };
+        if (best) {
+          const bestAspect = best.width / Math.max(1, best.height);
+          const prefAspect = preferredWidth / Math.max(1, fallback.height);
+          if (bestAspect < 1 && prefAspect > bestAspect * 1.1) {
+            finalResult = { area: fallback.width * fallback.height, width: preferredWidth, ...fallback };
+          }
+        }
+        return { width: finalResult.width, height: finalResult.height };
+      }
+
+      async function render(rows) {
+        rootG.selectAll("*").remove();
+        const cleanedRows = normalizeRows(rows);
+        const validRows = cleanedRows.filter((row) => normalizeText(row.image));
+        const imageFiles = [
+          ...validRows.map((row) => normalizeText(row.image)).filter(Boolean),
+          ...((rigRows || []).map((row) => normalizeText(row.image)).filter(Boolean))
+        ];
+        await Promise.all(imageFiles.map((file) => resolveImageSource(file)));
+
+        const categoryMap = new Map();
+        validRows.forEach((row) => {
+          const catKey = normalizeText(row.genre1);
+          const catLabel = categoryLabel(catKey);
+          if (!categoryMap.has(catLabel)) {
+            categoryMap.set(catLabel, []);
+          }
+          categoryMap.get(catLabel).push(row);
+        });
+
+        const categories = Array.from(categoryMap.entries()).map(([name, items], index) => {
+          const subMap = new Map();
+          items.forEach((row) => {
+            const subKey = normalizeText(row.genre2) || "その他";
+            if (!subMap.has(subKey)) {
+              subMap.set(subKey, []);
+            }
+            subMap.get(subKey).push(row);
+          });
+          const subcategories = Array.from(subMap.entries()).map(([subName, subItems]) => {
+            const items = subItems.map((item) => {
+              const fileName = normalizeText(item.image);
+              const imagePath = resolvedImages.get(fileName) || buildImagePaths(fileName).fallback;
+              const meta = imageMeta.get(imagePath) || { w: ui.fallbackSize, h: ui.fallbackSize };
+              const scale = computeScale(meta.w, meta.h);
+              return {
+                ...item,
+                imagePath,
+                w: meta.w * scale,
+                h: meta.h * scale
+              };
+            });
+            return {
+              id: `${name}-${subName}`,
+              name: subName,
+              items
+            };
+          });
+          return {
+            id: `cat-${name}`,
+            name,
+            color: palette[index % palette.length],
+            subcategories
+          };
+        });
+
+        const rigItems = buildRigItems(rigRows);
+        if (rigItems.length) {
+          categories.push({
+            id: "cat-rig",
+            name: "Camera Loadout",
+            color: "#b9c8ff",
+            isRig: true,
+            rigItems
+          });
+        }
+
+        const layoutCategories = categories.map(layoutCategory);
+        const board = layoutBoard(layoutCategories);
+        const viewWidth = Math.max(1200, board.width + ui.catPadding * 2);
+        const viewHeight = Math.max(800, board.height + ui.catPadding * 2);
+        svg.attr("viewBox", `0 0 ${viewWidth} ${viewHeight}`);
+
+        const categoryGroups = rootG.selectAll(".category")
+          .data(layoutCategories, (d) => d.id)
+          .enter()
+          .append("g")
+          .attr("class", "category")
+          .attr("transform", (d) => `translate(${d.x}, ${d.y})`);
+
+        categoryGroups.append("rect")
+          .attr("class", "category-box")
+          .attr("width", (d) => d.width)
+          .attr("height", (d) => d.height);
+
+        categoryGroups.append("text")
+          .attr("class", "category-title")
+          .attr("x", ui.catPadding)
+          .attr("y", 120)
+          .text((d) => d.name);
+
+        const rigGroups = categoryGroups.filter((d) => d.isRig);
+        const rigTile = rigGroups.append("g")
+          .attr("class", "tile-group tile-shadow")
+          .attr("transform", `translate(${ui.catPadding}, ${ui.catHeader + ui.catPadding})`);
+
+        rigTile.append("rect")
+          .attr("class", "tile-frame")
+          .attr("width", (d) => d.rigBoxWidth)
+          .attr("height", (d) => d.rigBoxHeight);
+
+        const rigFo = rigTile.append("foreignObject")
+          .attr("width", (d) => d.rigBoxWidth)
+          .attr("height", (d) => d.rigBoxHeight);
+
+        rigFo.append("xhtml:div")
+          .attr("class", "rig-wrap")
+          .each(function (d) {
+            const wrap = d3.select(this);
+            const rigGrid = wrap.append("xhtml:div").attr("class", "rig");
+            const units = rigGrid.selectAll(".unit")
+              .data(d.rigItems)
+              .enter()
+              .append("xhtml:div")
+              .attr("class", (item) => `unit ${imageKey(item.image)}`);
+
+            units.append("xhtml:div")
+              .attr("class", "unit-header")
+              .text((item) => imageKey(item.image).toUpperCase());
+
+            const imageBox = units.append("xhtml:div").attr("class", "image-box");
+            imageBox.append("xhtml:img")
+              .attr("alt", (item) => item.name || "")
+              .attr("src", (item) => {
+                const fileName = normalizeText(item.image);
+                return resolvedImages.get(fileName) || buildImagePaths(fileName).fallback;
+              })
+              .on("load", () => {})
+              .on("error", () => {});
+
+            units.append("xhtml:div")
+              .attr("class", "unit-title")
+              .text((item) => item.name || "");
+
+            units.append("xhtml:div")
+              .attr("class", "specs")
+              .text((item) => item.sensor ? `SENSOR: ${item.sensor}` : "");
+
+            const statWrap = units.append("xhtml:div")
+              .attr("class", (item) => `stat-wrap ${imageKey(item.image)}`);
+            const showLensStats = (item) => {
+              const key = imageKey(item.image);
+              return key === "cl1" || key === "cl2" || key === "cl3" || key === "cl4";
+            };
+            addStat(statWrap, "FOCAL", (item) => item.focal_length, (value) => statValue(value, "focal"), showLensStats);
+            addStat(statWrap, "APERTURE", (item) => item.aperture, (value) => statValue(value, "aperture"), showLensStats);
+            addStat(statWrap, "WEIGHT", (item) => item.weight, (value) => statValue(value, "weight"));
+          });
+
+        const subGroups = categoryGroups.selectAll(".sub")
+          .data((d) => d.subcategories)
+          .enter()
+          .append("g")
+          .attr("class", "sub")
+          .attr("transform", (d) => `translate(${d.x}, ${d.y})`);
+
+        subGroups.append("rect")
+          .attr("class", "sub-box")
+          .attr("width", (d) => d.layout.width)
+          .attr("height", (d) => d.layout.height);
+
+        subGroups.append("text")
+          .attr("class", "sub-title")
+          .attr("x", ui.subPadding)
+          .attr("y", ui.subPadding + 120)
+          .text((d) => d.name);
+
+        const tiles = [];
+        layoutCategories.forEach((category) => {
+          category.subcategories.forEach((sub) => {
+            let rowY = 0;
+            sub.layout.rows.forEach((row) => {
+              let rowX = 0;
+              row.items.forEach((item, idx) => {
+                const x = category.x + sub.x + ui.subPadding + rowX;
+                const y = category.y + sub.y + ui.subPadding + ui.subTitleHeight + rowY;
+                tiles.push({
+                  id: `${category.id}-${sub.id}-${idx}`,
+                  x,
+                  y,
+                  w: item.w,
+                  h: item.h,
+                  title: normalizeText(item.title) || normalizeText(item.image),
+                  image: item.imagePath,
+                  url: normalizeText(item.url)
+                });
+                rowX += item.w + ui.tileGap;
+              });
+              rowY += row.height + ui.tileGap;
+            });
+          });
+        });
+
+        const tileGroups = rootG.selectAll(".tile-group")
+          .data(tiles, (d) => d.id)
+          .enter()
+          .append("g")
+          .attr("class", (d) => `tile-group tile-shadow${d.url ? " is-link" : ""}`)
+          .attr("transform", (d) => `translate(${d.x}, ${d.y})`);
+
+        tileGroups.append("rect")
+          .attr("class", "tile-frame")
+          .attr("width", (d) => d.w)
+          .attr("height", (d) => d.h);
+
+        tileGroups.append("image")
+          .attr("width", (d) => d.w)
+          .attr("height", (d) => d.h)
+          .attr("href", (d) => d.image)
+          .attr("preserveAspectRatio", "xMidYMid slice")
+          .on("click", (event, d) => {
+            if (!d.url) return;
+            event.stopPropagation();
+            window.open(d.url, "_blank", "noopener,noreferrer");
+          });
+
+        tileGroups.append("text")
+          .attr("class", "tile-title")
+          .attr("x", 10)
+          .attr("y", (d) => d.h - 10)
+          .text((d) => d.title);
+
+        tileGroups.append("title")
+          .text((d) => d.title);
+
+        if (!tiles.length) {
+          rootG.append("text")
+            .attr("class", "note")
+            .attr("x", 40)
+            .attr("y", 60)
+            .text("画像がありません。items.csvとimages/originalを確認してください。");
+        }
+
+        applyInitialZoom();
+      }
+
+      function handleCsvFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const text = reader.result;
+          const rows = d3.csvParse(text);
+          render(rows);
+        };
+        reader.readAsText(file);
+      }
+
+      if (loadCsvButton && csvFileInput) {
+        loadCsvButton.addEventListener("click", () => csvFileInput.click());
+        csvFileInput.addEventListener("change", (event) => {
+          handleCsvFile(event.target.files[0]);
+        });
+      }
+
+      d3.csv("items.csv").then((rows) => {
+        itemsRows = rows;
+        return render(rows);
+      }).catch((err) => {
+        console.error("Failed to load items.csv", err);
+        if (controls) {
+          controls.style.opacity = "1";
+        }
+      });
+
+      d3.csv("camera_ui.csv").then((rows) => {
+        rigRows = rows;
+        if (itemsRows) {
+          render(itemsRows);
+        }
+      }).catch(() => {
+        rigRows = [];
+      });
+
+      window.addEventListener("resize", () => {
+        applyInitialZoom();
+      });
+    </script>
+  </body>
+</html>
